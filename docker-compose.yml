@@ -1,0 +1,57 @@
+name: telegram-media-downloader
+
+services:
+  telegram-downloader:
+    build:
+      context: .
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    image: telegram-media-downloader:local
+    container_name: telegram-downloader
+    env_file: .env
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${DASHBOARD_BIND_IP:-127.0.0.1}:${DASHBOARD_PORT:-8787}:8787"
+    volumes:
+      - /storage/appdata/telegram-downloader/database:/app/database
+      - /storage/appdata/telegram-downloader/session:/app/session
+      - /storage/appdata/telegram-downloader/logs:/app/logs
+      - /storage/media/telegram:/downloads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    profiles: ["jellyfin"]
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "8096:8096"
+    volumes:
+      - /storage/appdata/jellyfin/config:/config
+      - /storage/appdata/jellyfin/cache:/cache
+      - /storage/media/telegram/movies:/media/movies:ro
+      - /storage/media/telegram/tv:/media/tv:ro
+      - /storage/media/telegram/videos:/media/videos:ro
+      - /storage/media/telegram/audio:/media/audio:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
