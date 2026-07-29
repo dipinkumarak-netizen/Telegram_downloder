@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
         logger.info("Graceful shutdown started")
         await queue.stop()
         await telegram.stop()
+        await database.close()
 
 
 app = FastAPI(title="Telegram Media Downloader", lifespan=lifespan)

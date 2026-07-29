@@ -10,3 +10,9 @@ htmlcov/
 data/
 *.session
 *.session-journal
+downloads/
+database/
+logs/
+session/
+incomplete/
+*.save

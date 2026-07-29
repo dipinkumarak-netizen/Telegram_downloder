@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     database_path: Path = Path("/app/database/downloads.db")
     log_dir: Path = Path("/app/logs")
     download_root: Path = Path("/downloads")
-    concurrent_downloads: int = Field(default=2, ge=1, le=16)
+    concurrent_downloads: int = Field(default=1, ge=1, le=16)
     max_file_size_gb: float = Field(default=0, ge=0)
     min_free_space_gb: float = Field(default=5, ge=0)
     bandwidth_limit_mbps: float = Field(default=0, ge=0)

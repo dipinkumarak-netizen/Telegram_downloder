@@ -36,12 +36,11 @@ To discover chat IDs after login, run:
 
 ```bash
 docker compose run --rm --entrypoint python telegram-downloader -c \
-  "import asyncio; from app.config import get_settings; from telethon import TelegramClient; s=get_settings(); c=TelegramClient(str(s.telegram_session_path),s.telegram_api_id,s.telegram_api_hash.get_secret_value()); async def x(): await c.start(); [print(d.id, d.name) for d in await c.get_dialogs()]; await c.disconnect(); asyncio.run(x())"
+  "from app.config import get_settings; from telethon.sync import TelegramClient; s=get_settings(); c=TelegramClient(str(s.telegram_session_path),s.telegram_api_id,s.telegram_api_hash.get_secret_value()); c.start(); [print(d.id, d.name) for d in c.get_dialogs()]; c.disconnect()"
 ```
 
-If the shell dislikes the one-line async command, use Telegram Web URLs or temporarily run
-an interactive Python shell. Supergroups/channels normally appear as `-100...`. Always copy
-the exact ID printed by Telethon.
+The command still requires an authorized session. Supergroups/channels normally appear as
+`-100...`. Always copy the exact ID printed by Telethon.
 
 ## 2. Host setup
 
@@ -192,8 +191,8 @@ script.
 
 ## Known limitations and next steps
 
-- MTProto does not offer a general byte-range resume contract through Telethon; interrupted
-  `.part` files are safely discarded and retried from the start.
+- Interrupted downloads resume from the existing `.part` size when Telegram still serves the
+  same media; invalid oversize partials are discarded and restarted from zero automatically.
 - Classification is deliberately basic; naming tools such as FileBot/Radarr/Sonarr are not
   integrated.
 - Status replies are queued/completed/duplicate/error oriented; dashboard progress is the

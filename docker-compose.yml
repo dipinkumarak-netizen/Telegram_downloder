@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${DASHBOARD_BIND_IP:-127.0.0.1}:${DASHBOARD_PORT:-8787}:8787"
+      - "${DASHBOARD_PORT:-8787}:8787"
     volumes:
       - /storage/appdata/telegram-downloader/database:/app/database
       - /storage/appdata/telegram-downloader/session:/app/session

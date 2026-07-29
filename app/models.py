@@ -36,6 +36,7 @@ class DownloadJob:
     speed_bps: float
     retry_count: int
     error_message: str | None
+    message_date: str | None
     created_at: str
     updated_at: str
     completed_at: str | None

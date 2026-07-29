@@ -12,7 +12,7 @@
     .card{background:var(--card);border:1px solid #26344c;border-radius:12px;padding:16px}.value{font-size:23px;margin-top:6px}
     .muted{color:var(--muted)}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #26344c}
     .scroll{overflow:auto}.bar{width:140px;background:#26344c;height:8px;border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
-    button{border:0;border-radius:6px;padding:6px 9px;cursor:pointer}.danger{background:var(--bad)}.retry{background:var(--accent)}
+    button{border:0;border-radius:6px;padding:6px 9px;cursor:pointer}.danger{background:var(--bad)}.retry{background:var(--accent)}.secondary{background:#334663;color:#edf4ff}
     .ok{color:var(--good)}.bad{color:var(--bad)}pre{white-space:pre-wrap;max-height:220px;overflow:auto}
     @media(max-width:650px){main{padding:12px}th:nth-child(3),td:nth-child(3){display:none}}
   </style>
@@ -29,10 +29,18 @@
   <section class="card" style="margin-top:12px"><h2>Downloads</h2><div class="scroll"><table>
     <thead><tr><th>File</th><th>Status</th><th>Progress</th><th>Speed</th><th>Action</th></tr></thead><tbody id="jobs"></tbody>
   </table></div></section>
-  <section class="card" style="margin-top:12px"><h2>Recent events</h2><pre id="events"></pre></section>
+  <section class="card" style="margin-top:12px">
+    <div class="head">
+      <h2>Recent events</h2>
+      <button class="secondary" onclick="clearHistory()">Clear history</button>
+    </div>
+    <p class="muted">Clears completed, failed, and cancelled entries plus event logs. Active downloads stay intact.</p>
+    <pre id="events"></pre>
+  </section>
 </main><script>
 const size=n=>{if(!n)return"0 B";const u=["B","KB","MB","GB","TB"],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),4);return`${(n/1024**i).toFixed(i?1:0)} ${u[i]}`}
 async function action(id,name){await fetch(`/api/downloads/${id}/${name}`,{method:"POST"});refresh()}
+async function clearHistory(){if(!confirm("Clear completed, failed, and cancelled history from the dashboard?"))return;const r=await fetch("/api/history/clear",{method:"POST"});if(!r.ok){connection.innerHTML='<span class="bad">● Clear failed</span>';return}refresh()}
 async function refresh(){try{const r=await fetch("/api/status");if(!r.ok)return;const d=await r.json(),c=d.stats.counts;
 document.querySelector("#connection").innerHTML=d.telegram_connected?'<span class="ok">● Telegram connected</span>':'<span class="bad">● Disconnected</span>';
 queue.textContent=d.queue_size;completed.textContent=c.completed||0;failed.textContent=c.failed||0;disk.textContent=size(d.disk.free);total.textContent=size(d.stats.total_downloaded);

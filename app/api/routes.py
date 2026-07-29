@@ -90,6 +90,13 @@ async def cancel(job_id: int, request: Request) -> dict[str, bool]:
     return {"ok": True}
 
 
+@router.post("/api/history/clear", dependencies=[Depends(authenticate)])
+async def clear_history(request: Request) -> dict[str, object]:
+    _, database, queue = services(request)
+    cleared = await database.clear_history()
+    return {"ok": True, "cleared": cleared, "queue_size": queue.queue.qsize()}
+
+
 @router.get("/health")
 async def health(request: Request) -> dict[str, object]:
     return {

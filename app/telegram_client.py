@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+import asyncio
 
 from telethon import TelegramClient, events
 from telethon.tl.custom.message import Message
@@ -11,7 +12,7 @@ from app.config import Settings
 from app.database import Database
 
 logger = logging.getLogger(__name__)
-QueueCallback = Callable[[int], Awaitable[None]]
+QueueCallback = Callable[[int], Awaitable[bool]]
 
 
 class TelegramService:
@@ -23,12 +24,15 @@ class TelegramService:
             str(settings.telegram_session_path),
             settings.telegram_api_id,
             settings.telegram_api_hash.get_secret_value(),
-            sequential_updates=False,
+            sequential_updates=True,
         )
         self.connected = False
         self.user_id: int | None = None
+        self._monitor_task: asyncio.Task[None] | None = None
+        self._stopping = False
 
     async def start(self) -> None:
+        self._stopping = False
         await self.client.connect()
         if not await self.client.is_user_authorized():
             raise RuntimeError(
@@ -41,12 +45,47 @@ class TelegramService:
         self.connected = True
         me = await self.client.get_me()
         self.user_id = me.id
+        if self._monitor_task is None or self._monitor_task.done():
+            self._monitor_task = asyncio.create_task(
+                self._monitor_connection(), name="telegram-connection-monitor"
+            )
         logger.info("Telegram connected as user_id=%s", me.id)
 
     async def stop(self) -> None:
+        self._stopping = True
         self.connected = False
         self.user_id: int | None = None
+        if self._monitor_task is not None:
+            self._monitor_task.cancel()
+            await asyncio.gather(self._monitor_task, return_exceptions=True)
+            self._monitor_task = None
         await self.client.disconnect()
+
+    async def ensure_connected(self) -> None:
+        if self.client.is_connected():
+            self.connected = True
+            return
+        logger.warning("Telegram disconnected; reconnecting client")
+        await self.client.connect()
+        if not await self.client.is_user_authorized():
+            self.connected = False
+            raise RuntimeError(
+                "Telegram session is not authorized. Run scripts/telegram_login.py first."
+            )
+        self.connected = True
+
+    async def _monitor_connection(self) -> None:
+        while not self._stopping:
+            try:
+                await self.client.disconnected
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("Telegram disconnect monitor error: %s", exc)
+            self.connected = False
+            if self._stopping:
+                break
+            logger.warning("Telegram connection lost; waiting for next download attempt to reconnect")
 
     async def _on_message(self, event: events.NewMessage.Event) -> None:
         message = event.message
@@ -77,11 +116,14 @@ class TelegramService:
             file_size=size,
             mime_type=message.file.mime_type,
             category=category,
+            message_date=message.date.isoformat() if message.date else None,
         )
         if job_id is None:
             await self._reply(message, f"Duplicate skipped: {filename} ({duplicate})")
             return
-        await self.database.event("INFO", f"Queued: {filename}")
+        await self.database.event(
+            "INFO", f"Queued chat_id={chat_id} message_id={message.id} filename={filename}"
+        )
         await self._reply(message, f"Queued: {filename}")
         await self.enqueue(job_id)
 
