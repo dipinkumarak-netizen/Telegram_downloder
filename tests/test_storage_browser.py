@@ -42,3 +42,12 @@ def test_host_and_container_paths_are_distinct(tmp_path: Path):
     browser = StorageBrowser(root, "/storage")
     assert browser.relative_for_host("/storage/media") == "media"
     assert browser.container_path("media") == str(root / "media")
+
+
+def test_prepare_disk_creates_managed_layout(tmp_path: Path):
+    root = tmp_path / "mounted"
+    root.mkdir()
+    result = StorageBrowser(root, "/storage").prepare_disk("")
+    assert result["host_download_dir"] == "/storage/telegram-media-downloader/downloads"
+    assert (root / "telegram-media-downloader/downloads/movies").is_dir()
+    assert (root / "telegram-media-downloader/incomplete").is_dir()

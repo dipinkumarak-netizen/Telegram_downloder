@@ -218,18 +218,22 @@ async def save_storage_picker(payload: StoragePathRequest, request: Request) -> 
             and relative.startswith(str(browser.host_root))
         ):
             relative = browser.relative_for_host(relative)
-        result = browser.validate(relative)
-        if not result.get("writable"):
-            raise SetupError("Selected storage folder is not writable.")
-        existing = setup_service(request).status
-        status_data = await existing()
-        temp_dir = payload.temp_dir or status_data["temp_dir"]
-        saved = setup_service(request).save_storage(browser.container_path(relative), temp_dir)
-        setup_service(request)._store_update("storage", {"host_download_dir": result["host_path"]})
+        result = browser.prepare_disk(relative)
+        saved = setup_service(request).save_storage(result["download_dir"], result["temp_dir"])
+        setup_service(request)._store_update(
+            "storage",
+            {
+                "host_download_dir": result["host_download_dir"],
+                "host_incomplete_dir": result["host_incomplete_dir"],
+                "storage_root": result["host_root"],
+            },
+        )
         pending = request.app.state.settings.config_dir / "pending-download-host-dir"
-        pending.write_text(result["host_path"] + "\n", encoding="utf-8")
+        pending.write_text(result["host_root"] + "\n", encoding="utf-8")
         pending.chmod(0o600)
-        saved["host_download_dir"] = result["host_path"]
+        saved["host_download_dir"] = result["host_download_dir"]
+        saved["host_incomplete_dir"] = result["host_incomplete_dir"]
+        saved["temp_dir"] = result["temp_dir"]
         saved["restart_required"] = True
         saved["deployment"] = "pending"
         return saved

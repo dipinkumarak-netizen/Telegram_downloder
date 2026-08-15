@@ -57,6 +57,35 @@ class StorageBrowser:
             return []
         return [self._metadata(self.container_root, "")] if self.container_root.is_dir() else []
 
+    def prepare_disk(self, relative: str | None = "") -> dict[str, Any]:
+        disk = self._safe(relative)
+        if not disk.is_dir() or not os.access(disk, os.W_OK):
+            raise ValueError("Selected storage is unavailable or not writable.")
+        base = disk / "telegram-media-downloader"
+        downloads = base / "downloads"
+        incomplete = base / "incomplete"
+        for path in (base, downloads, incomplete):
+            path.mkdir(exist_ok=True)
+        categories = (
+            "movies",
+            "tv",
+            "videos",
+            "audio",
+            "images",
+            "documents",
+            "archives",
+            "other",
+        )
+        for category in categories:
+            (downloads / category).mkdir(exist_ok=True)
+        return {
+            "host_root": self._host_path(disk),
+            "host_download_dir": self._host_path(downloads),
+            "host_incomplete_dir": self._host_path(incomplete),
+            "download_dir": "/downloads",
+            "temp_dir": "/incomplete",
+        }
+
     def browse(self, relative: str | None = "") -> dict[str, Any]:
         path = self._safe(relative)
         if not path.is_dir():

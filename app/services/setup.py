@@ -76,6 +76,8 @@ class SetupService:
             },
             "download_dir": str(storage.get("download_dir") or self.settings.download_root),
             "host_download_dir": storage.get("host_download_dir"),
+            "host_incomplete_dir": storage.get("host_incomplete_dir"),
+            "storage_root": storage.get("storage_root"),
             "temp_dir": str(storage.get("temp_dir") or self.settings.temp_dir),
             "storage_configured": bool(
                 storage.get("download_dir") and storage.get("temp_dir")

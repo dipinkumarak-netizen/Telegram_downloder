@@ -13,7 +13,7 @@ services:
       TMD_SESSION_DIR: /data/session
       TMD_CONFIG_DIR: /data/config
       TMD_LOG_DIR: /data/logs
-      TMD_TEMP_DIR: /data/tmp
+      TMD_TEMP_DIR: /incomplete
       TMD_DOWNLOAD_DIR: /downloads
       TMD_STORAGE_BROWSE_CONTAINER_ROOT: /host-storage
       TMD_STORAGE_BROWSE_HOST_ROOT: ${TMD_STORAGE_BROWSE_HOST_ROOT:-/storage}
@@ -25,6 +25,7 @@ services:
     volumes:
       - ${TMD_DATA_HOST_DIR:-/var/lib/telegram-media-downloader}:/data
       - ${TMD_DOWNLOAD_HOST_DIR:-/srv/telegram-media-downloader/downloads}:/downloads
+      - ${TMD_INCOMPLETE_HOST_DIR:-/srv/telegram-media-downloader/incomplete}:/incomplete
       - ${TMD_STORAGE_BROWSE_HOST_ROOT:-/storage}:/host-storage:rw
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health', timeout=3)"]

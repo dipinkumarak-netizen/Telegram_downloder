@@ -11,8 +11,11 @@ selected="$(head -n 1 "$pending")"; root_real="$(realpath -e -- "$root")" || { e
 [[ -d "$selected_real" && -w "$selected_real" && "$selected_real" != "/" ]] || { echo "Selected storage is unavailable. No changes were applied." >&2; exit 1; }
 case "$selected_real" in "$root_real"|"$root_real"/*) ;; *) echo "Selected storage is outside the approved root." >&2; exit 1 ;; esac
 case "$selected_real" in /etc|/proc|/sys|/dev|/run|/var/lib/docker|/home) echo "Invalid selected storage." >&2; exit 1 ;; esac
+download_host="$selected_real/telegram-media-downloader/downloads"
+incomplete_host="$selected_real/telegram-media-downloader/incomplete"
+[[ -d "$download_host" && -d "$incomplete_host" ]] || { echo "Selected storage is unavailable. No changes were applied." >&2; exit 1; }
 tmp="$(mktemp "$ENV_FILE.tmp.XXXXXX")"; trap 'rm -f "$tmp"' EXIT
-awk -F= -v key=TMD_DOWNLOAD_HOST_DIR -v value="$selected_real" '$1 == key { if (!seen++) print key "=" value; next } { print } END { if (!seen) print key "=" value }' "$ENV_FILE" > "$tmp"
+awk -F= -v d="$download_host" -v i="$incomplete_host" 'BEGIN{D=0;I=0} $1=="TMD_DOWNLOAD_HOST_DIR"{if(!D++)print "TMD_DOWNLOAD_HOST_DIR=" d;next} $1=="TMD_INCOMPLETE_HOST_DIR"{if(!I++)print "TMD_INCOMPLETE_HOST_DIR=" i;next} {print} END{if(!D)print "TMD_DOWNLOAD_HOST_DIR=" d;if(!I)print "TMD_INCOMPLETE_HOST_DIR=" i}' "$ENV_FILE" > "$tmp"
 chmod 0600 "$tmp"; mv -f -- "$tmp" "$ENV_FILE"; rm -f -- "$pending"
 if [[ "${TMD_TEST_MODE:-0}" == "1" ]]; then echo "Storage bind configuration applied (test mode)."; exit 0; fi
 compose=(docker compose --env-file "$ENV_FILE" -f "$INSTALL_DIR/docker-compose.yml")

@@ -6,6 +6,7 @@ readonly RAW_BASE="https://raw.githubusercontent.com/${REPOSITORY}"
 INSTALL_DIR="${TMD_INSTALL_DIR:-/opt/telegram-media-downloader}"
 DATA_DIR="/var/lib/telegram-media-downloader"
 DOWNLOADS_DIR="/srv/telegram-media-downloader/downloads"
+INCOMPLETE_DIR=""
 HTTP_PORT="8787"
 BIND_ADDRESS="0.0.0.0"
 RELEASE_REF="${TMD_RELEASE_REF:-main}"
@@ -59,7 +60,9 @@ if [[ -f "$existing_env" ]]; then
   BIND_ADDRESS="$(read_existing TMD_BIND_ADDRESS "$BIND_ADDRESS")"
   DATA_DIR="$(read_existing TMD_DATA_HOST_DIR "$DATA_DIR")"
   DOWNLOADS_DIR="$(read_existing TMD_DOWNLOAD_HOST_DIR "$DOWNLOADS_DIR")"
+  INCOMPLETE_DIR="$(read_existing TMD_INCOMPLETE_HOST_DIR "")"
 fi
+INCOMPLETE_DIR="${INCOMPLETE_DIR:-${DOWNLOADS_DIR%/*}/incomplete}"
 
 [[ "$HTTP_PORT" =~ ^[0-9]+$ ]] && ((HTTP_PORT >= 1 && HTTP_PORT <= 65535)) ||
   die "Port must be between 1 and 65535."
@@ -123,7 +126,7 @@ runtime_gid="${TMD_GID:-${SUDO_GID:-1000}}"
 install -d -m 0755 "$INSTALL_DIR"
 install -d -m 0750 -o "$runtime_uid" -g "$runtime_gid" \
   "$DATA_DIR" "$DATA_DIR/config" "$DATA_DIR/database" "$DATA_DIR/session" \
-  "$DATA_DIR/logs" "$DATA_DIR/tmp" "$DOWNLOADS_DIR"
+  "$DATA_DIR/logs" "$DATA_DIR/tmp" "$DOWNLOADS_DIR" "$INCOMPLETE_DIR"
 
 temporary_dir="$(mktemp -d)"
 trap 'rm -rf "$temporary_dir"' EXIT
@@ -172,6 +175,7 @@ if [[ ! -e "$env_file" ]]; then
     printf 'TMD_BIND_ADDRESS=%s\n' "$BIND_ADDRESS"
     printf 'TMD_DATA_HOST_DIR=%s\n' "$DATA_DIR"
     printf 'TMD_DOWNLOAD_HOST_DIR=%s\n' "$DOWNLOADS_DIR"
+    printf 'TMD_INCOMPLETE_HOST_DIR=%s\n' "$INCOMPLETE_DIR"
     printf 'TMD_STORAGE_BROWSE_HOST_ROOT=/storage\n'
     printf 'TMD_UID=%s\nTMD_GID=%s\n' "$runtime_uid" "$runtime_gid"
     printf 'TZ=%s\n' "${TZ:-Etc/UTC}"
