@@ -17,6 +17,8 @@ DEFAULT_DATA: dict[str, Any] = {
     "setup_completed": False,
     "admin": {},
     "telegram": {},
+    "telegram_source_ids": [],
+    "telegram_sources": [],
     "storage": {},
     "jellyfin": {"enabled": False},
 }
@@ -57,6 +59,13 @@ class SettingsStore:
                 current = {}
             current.update(values)
             data[section] = current
+            self._write(data)
+            return deepcopy(data)
+
+    def update_root(self, values: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            data = self.load()
+            data.update(values)
             self._write(data)
             return deepcopy(data)
 

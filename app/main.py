@@ -18,6 +18,7 @@ from app.services.admin_auth import AdminAuthService
 from app.services.settings_store import RuntimeSettings, SettingsStore
 from app.services.setup import SetupService
 from app.services.telegram_auth import TelegramAuthService
+from app.services.telegram_sources import TelegramSourceService
 from app.telegram_client import TelegramService
 
 settings = get_settings()
@@ -50,7 +51,12 @@ async def lifespan(app: FastAPI):
         current = app.state.telegram
         if current is not None:
             await current.stop()
-        telegram = TelegramService(settings, database, queue.enqueue)
+        telegram = TelegramService(
+            settings,
+            database,
+            queue.enqueue,
+            source_ids_provider=lambda: telegram_sources.effective_ids(settings.allowed_chat_ids),
+        )
         try:
             await telegram.start()
         except Exception:
@@ -65,6 +71,9 @@ async def lifespan(app: FastAPI):
         telegram = app.state.telegram
         return telegram.client if telegram is not None and telegram.connected else None
 
+    telegram_sources = TelegramSourceService(store, active_auth_client)
+    app.state.telegram_sources = telegram_sources
+
     telegram_auth = TelegramAuthService(
         settings,
         on_authorized=start_telegram_runtime,
@@ -72,7 +81,12 @@ async def lifespan(app: FastAPI):
     )
     app.state.telegram_auth = telegram_auth
     app.state.setup_service = SetupService(
-        settings, store, runtime_settings, admin_auth, telegram_auth
+        settings,
+        store,
+        runtime_settings,
+        admin_auth,
+        telegram_auth,
+        telegram_sources=telegram_sources,
     )
     if telegram_auth.configured:
         try:

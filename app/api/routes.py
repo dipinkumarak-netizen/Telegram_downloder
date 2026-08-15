@@ -17,6 +17,7 @@ from app.database import Database
 from app.queue_manager import QueueManager
 from app.services.admin_auth import AdminAuthService
 from app.services.telegram_auth import TelegramAuthError, TelegramAuthService
+from app.services.telegram_sources import TelegramSourceService
 
 router = APIRouter()
 security = HTTPBasic(auto_error=False)
@@ -32,6 +33,10 @@ def auth_service(request: Request) -> TelegramAuthService:
     return request.app.state.telegram_auth
 
 
+def source_service(request: Request) -> TelegramSourceService:
+    return request.app.state.telegram_sources
+
+
 class PhoneRequest(BaseModel):
     phone: str
 
@@ -42,6 +47,10 @@ class CodeRequest(BaseModel):
 
 class PasswordRequest(BaseModel):
     password: SecretStr
+
+
+class TelegramSourcesRequest(BaseModel):
+    source_ids: list[int]
 
 
 def auth_error(exc: TelegramAuthError) -> HTTPException:
@@ -122,10 +131,14 @@ async def dashboard(
 async def app_status(request: Request) -> dict[str, object]:
     settings, database, queue = services(request)
     disk = shutil.disk_usage(settings.download_root)
+    source_service_instance = getattr(request.app.state, "telegram_sources", None)
     return {
         "running": True,
         "telegram_connected": bool(
             request.app.state.telegram and request.app.state.telegram.connected
+        ),
+        "telegram_sources_selected": (
+            len(source_service_instance.selected_ids()) if source_service_instance else 0
         ),
         "queue_size": queue.queue.qsize(),
         "disk": {"total": disk.total, "used": disk.used, "free": disk.free},
@@ -145,6 +158,32 @@ async def app_status(request: Request) -> dict[str, object]:
 @router.get("/api/telegram/status", dependencies=[Depends(require_admin)])
 async def telegram_status(request: Request) -> dict[str, object]:
     return await auth_service(request).status()
+
+
+@router.get("/api/telegram/sources", dependencies=[Depends(require_admin)])
+async def telegram_sources(
+    request: Request, refresh: bool = False
+) -> dict[str, object]:
+    authorized, sources = await source_service(request).list_sources(refresh=refresh)
+    return {"authorized": authorized, "sources": sources}
+
+
+@router.put("/api/settings/telegram-sources", dependencies=[Depends(require_admin)])
+async def save_telegram_sources(
+    payload: TelegramSourcesRequest, request: Request
+) -> dict[str, object]:
+    service = source_service(request)
+    authorized, available = await service.list_sources()
+    if not authorized:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Authorize Telegram before selecting sources."
+        )
+    try:
+        selected = service.save_ids(payload.source_ids, available)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
+    _, updated = await service.list_sources()
+    return {"ok": True, "source_ids": selected, "sources": updated}
 
 
 @router.post("/api/telegram/auth/send-code", dependencies=[Depends(require_admin)])

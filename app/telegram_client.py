@@ -13,13 +13,21 @@ from app.database import Database
 
 logger = logging.getLogger(__name__)
 QueueCallback = Callable[[int], Awaitable[bool]]
+SourceIdsProvider = Callable[[], set[int]]
 
 
 class TelegramService:
-    def __init__(self, settings: Settings, database: Database, enqueue: QueueCallback):
+    def __init__(
+        self,
+        settings: Settings,
+        database: Database,
+        enqueue: QueueCallback,
+        source_ids_provider: SourceIdsProvider | None = None,
+    ):
         self.settings = settings
         self.database = database
         self.enqueue = enqueue
+        self.source_ids_provider = source_ids_provider
         self.client = TelegramClient(
             str(settings.telegram_session_path),
             settings.telegram_api_id,
@@ -38,10 +46,9 @@ class TelegramService:
             raise RuntimeError(
                 "Telegram session is not authorized. Run scripts/telegram_login.py first."
             )
-        allowed = list(self.settings.allowed_chat_ids)
-        if self.settings.include_saved_messages:
-            allowed.append("me")
-        self.client.add_event_handler(self._on_message, events.NewMessage(chats=allowed or None))
+        # Keep one stable handler and apply the current source selection per event so
+        # Settings changes take effect without re-registering or restarting Telegram.
+        self.client.add_event_handler(self._on_message, events.NewMessage(chats=None))
         self.connected = True
         me = await self.client.get_me()
         self.user_id = me.id
@@ -92,10 +99,14 @@ class TelegramService:
         chat_id = event.chat_id
         if chat_id is None or not message.file:
             return
-        if chat_id not in self.settings.allowed_chat_ids and not (
-            self.settings.include_saved_messages and chat_id == self.user_id
-        ):
-            logger.warning("Ignoring file from non-allow-listed chat_id=%s", chat_id)
+        selected = (
+            self.source_ids_provider()
+            if self.source_ids_provider is not None
+            else set(self.settings.allowed_chat_ids)
+        )
+        if self.settings.include_saved_messages and self.user_id is not None:
+            selected.add(self.user_id)
+        if chat_id not in selected:
             return
         filename = self.filename_for(message)
         size = int(message.file.size or 0)

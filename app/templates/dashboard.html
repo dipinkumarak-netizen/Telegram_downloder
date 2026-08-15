@@ -25,6 +25,7 @@
     <div class="card"><span class="muted">Queue</span><div class="value" id="queue">—</div></div>
     <div class="card"><span class="muted">Completed</span><div class="value" id="completed">—</div></div>
     <div class="card"><span class="muted">Failed</span><div class="value" id="failed">—</div></div>
+    <div class="card"><span class="muted">Download sources</span><div class="value" id="source-count">—</div></div>
     <div class="card"><span class="muted">Disk free</span><div class="value" id="disk">—</div></div>
     <div class="card"><span class="muted">Downloaded</span><div class="value" id="total">—</div></div>
   </section>
@@ -80,7 +81,7 @@ async function action(id,name){await fetch(`/api/downloads/${id}/${name}`,{metho
 async function clearHistory(){if(!confirm("Clear completed, failed, and cancelled history from the dashboard?"))return;const r=await fetch("/api/history/clear",{method:"POST"});if(!r.ok){connection.innerHTML='<span class="bad">● Clear failed</span>';return}refresh()}
 async function refresh(){try{const r=await fetch("/api/status");if(!r.ok)return;const d=await r.json(),c=d.stats.counts;
 document.querySelector("#connection").innerHTML=d.telegram_connected?'<span class="ok">● Telegram connected</span>':'<span class="bad">● Disconnected</span>';
-queue.textContent=d.queue_size;completed.textContent=c.completed||0;failed.textContent=c.failed||0;disk.textContent=size(d.disk.free);total.textContent=size(d.stats.total_downloaded);
+queue.textContent=d.queue_size;completed.textContent=c.completed||0;failed.textContent=c.failed||0;document.getElementById("source-count").textContent=d.telegram_sources_selected||0;disk.textContent=size(d.disk.free);total.textContent=size(d.stats.total_downloaded);
 jobs.innerHTML=d.jobs.map(j=>`<tr><td>${esc(j.original_filename)}<br><small class="muted">${size(j.downloaded_bytes)} / ${size(j.file_size)}</small></td><td>${j.state}</td><td><div class="bar"><i style="width:${j.progress}%"></i></div>${j.progress.toFixed(1)}%</td><td>${size(j.speed_bps)}/s</td><td>${["queued","downloading"].includes(j.state)?`<button class="danger" onclick="action(${j.id},'cancel')">Cancel</button>`:["failed","cancelled"].includes(j.state)?`<button class="retry" onclick="action(${j.id},'retry')">Retry</button>`:""}</td></tr>`).join("");
 events.textContent=d.events.map(e=>`${e.created_at} ${e.level} ${e.message}`).join("\n")}catch(e){connection.innerHTML='<span class="bad">● Dashboard error</span>'}}
 function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}refresh();setInterval(refresh,3000);

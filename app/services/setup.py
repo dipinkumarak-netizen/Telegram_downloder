@@ -14,6 +14,7 @@ from app.config import Settings
 from app.services.admin_auth import AdminAuthService
 from app.services.settings_store import RuntimeSettings, SettingsStore, SettingsStoreError
 from app.services.telegram_auth import TelegramAuthService
+from app.services.telegram_sources import TelegramSourceService
 
 JellyfinTester = Callable[[str, str | None], Awaitable[bool]]
 
@@ -35,12 +36,14 @@ class SetupService:
         telegram_auth: TelegramAuthService,
         *,
         jellyfin_tester: JellyfinTester | None = None,
+        telegram_sources: TelegramSourceService | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.runtime = runtime
         self.admin = admin
         self.telegram_auth = telegram_auth
+        self.telegram_sources = telegram_sources
         self._jellyfin_tester = jellyfin_tester or self._test_jellyfin
 
     async def status(self) -> dict[str, Any]:
@@ -48,6 +51,11 @@ class SetupService:
         telegram = data.get("telegram", {})
         storage = data.get("storage", {})
         auth = await self.telegram_auth.status()
+        source_ids = (
+            self.telegram_sources.effective_ids(self.settings.allowed_chat_ids)
+            if self.telegram_sources
+            else set()
+        )
         return {
             "setup_completed": self.runtime.setup_completed,
             "legacy_environment_configured": self.runtime.legacy_environment_configured,
@@ -77,6 +85,8 @@ class SetupService:
                 "url": self.settings.jellyfin_url,
                 "api_key_configured": bool(self.settings.jellyfin_api_key),
             },
+            "telegram_source_ids": sorted(source_ids),
+            "telegram_sources_configured": bool(source_ids),
         }
 
     def save_telegram(self, api_id: int, api_hash: str) -> dict[str, Any]:
@@ -173,6 +183,10 @@ class SetupService:
             "jellyfin": not self.settings.jellyfin_refresh_enabled
             or bool(self.settings.jellyfin_url and self.settings.jellyfin_api_key),
         }
+        if self.telegram_sources is not None:
+            checks["telegram_sources"] = bool(
+                self.telegram_sources.effective_ids(self.settings.allowed_chat_ids)
+            ) and bool(auth["authorized"])
         return {"ok": all(checks.values()), "checks": checks}
 
     async def complete(self) -> dict[str, bool]:

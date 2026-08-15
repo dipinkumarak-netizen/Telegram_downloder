@@ -170,6 +170,16 @@ expires after ten minutes. Successful authorization is written by Telethon to th
 persistent session file, which the downloader then reopens for normal operation. The terminal
 `scripts/telegram_login.py` remains an administrative fallback.
 
+### Telegram Download Sources
+
+After Telegram login, open the **Telegram Sources** step in setup (or **Settings**) and
+refresh the available dialogs. Select one or more channels, groups, or supergroups, then
+save. Only selected sources are monitored; private one-to-one chats and Telegram service
+dialogs are excluded from discovery. If no Telegram source is selected, the downloader
+remains idle. Source IDs, rather than mutable display names, are persisted in the web-managed
+settings file. Existing explicit `ALLOWED_CHAT_IDS` values remain a compatibility fallback
+when no browser-managed source selection exists.
+
 ### Existing deployment compatibility
 
 An installation with explicit Telegram API credentials plus existing dashboard Basic Auth is
