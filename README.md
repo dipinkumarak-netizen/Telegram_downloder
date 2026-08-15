@@ -68,9 +68,8 @@ not delete existing data. Essential settings are:
 
 ## Portable Configuration
 
-All application settings are centralized in `app/config.py`. Precedence is an explicit
-environment variable, a path derived from its application root, then a portable default.
-New deployments use these container paths:
+All application settings are centralized in `app/config.py`; browser-managed settings are
+stored atomically in `/data/config/settings.json`. New deployments use these container paths:
 
 ```text
 /data/db/downloads.db          SQLite queue and history
@@ -100,14 +99,41 @@ mount its directory persistently. SQLite's database directory, including any WAL
 and the entire media directory must also remain persistent across upgrades. Never run two
 downloader instances against the same database or Telegram session.
 
-The first-run browser setup wizard and browser-based Telegram authentication are planned but
-are separate features. The complete first-run setup wizard is not implemented yet.
+## First-run Setup
+
+On a fresh installation, open the application URL. The dashboard redirects to `/setup` until
+setup is completed:
+
+1. Create the single administrator account.
+2. Enter the Telegram API ID and API hash from my.telegram.org.
+3. Configure writable media and incomplete-download directories.
+4. Optionally enable Jellyfin, save its URL/API key, and test the connection.
+5. Enter the Telegram phone number, verify the OTP, and provide the Telegram 2FA password
+   when required.
+6. Review the non-secret summary and validate all required checks.
+7. Complete setup; later visits use the normal dashboard and `/settings` page.
+
+The data/config mount must be persistent. The wizard does not configure Docker bind mounts or
+install host packages; final Linux installer packaging remains future work.
+
+### Configuration precedence
+
+The effective precedence is:
+
+1. Explicit process environment or `.env` values.
+2. Persisted browser-managed settings in `/data/config/settings.json`.
+3. Application defaults and paths derived from `/data` and `/downloads`.
+
+The wizard records values even when an environment variable overrides them, but reports the
+override and never silently replaces an explicit environment value. Database and Telegram
+session paths are deployment-managed and cannot be changed in the browser. Changing Telegram
+API credentials while the listener is connected reports `restart_required=true`; the server
+is never restarted automatically.
 
 ## Browser-based Telegram Login
 
-Telegram API credentials must currently be supplied through `TELEGRAM_API_ID` and
-`TELEGRAM_API_HASH`; the browser cannot create or edit them yet. Configure a non-empty
-`DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`, start the application, and open the dashboard's
+Telegram API credentials may be supplied through the first-run wizard or environment
+variables. Open the setup wizard's **Telegram Login** step or the dashboard's
 **Telegram account** panel.
 
 1. Enter the account phone number in international format and select **Send Code**.
@@ -116,15 +142,19 @@ Telegram API credentials must currently be supplied through `TELEGRAM_API_ID` an
 4. After authorization, the panel displays the account name, username, masked phone number,
    and authorized session status.
 
-The OTP, two-step password, API hash, and Telegram phone-code hash are never returned by the
-API or persisted as application settings. Pending browser login state remains server-side,
-allows only one flow at a time, and expires after ten minutes. Successful authorization is
-written by Telethon to the configured persistent session file, which the downloader then
-reopens for normal operation. The terminal `scripts/telegram_login.py` remains available as
-an administrative fallback.
+The OTP, two-step password, and Telegram phone-code hash are never returned or persisted.
+The API hash is never returned and is protected in the owner-readable persistent settings
+file. Pending browser login state remains server-side, allows only one flow at a time, and
+expires after ten minutes. Successful authorization is written by Telethon to the configured
+persistent session file, which the downloader then reopens for normal operation. The terminal
+`scripts/telegram_login.py` remains an administrative fallback.
 
-The full first-run browser setup wizard, including API credential entry, will be implemented
-in a later phase.
+### Existing deployment compatibility
+
+An installation with explicit Telegram API credentials plus existing dashboard Basic Auth is
+treated as already configured even when `settings.json` does not exist. Its environment paths,
+SQLite database, Telethon session, logs, media directory, and Jellyfin settings continue to
+win over browser settings. No production data is migrated or copied automatically.
 
 ## 3. Build and Telegram login
 
@@ -150,7 +180,7 @@ docker compose logs -f --tail=200 telegram-downloader
 ```
 
 Open `http://SERVER_TAILSCALE_IP:8787` (or the bind address/port configured in `.env`).
-Do not publish this unauthenticated dashboard to the public internet. Health is available at
+Do not publish the dashboard to the public internet without HTTPS. Health is available at
 `/health`; application logs also rotate under
 `/storage/appdata/telegram-downloader/logs`.
 
@@ -236,10 +266,17 @@ the same UID/GID, then start it. The session file is account access material: en
 
 ## 10. Security
 
-Keep `.env` mode `0600`, session/database backups private, use Tailscale ACLs, and never
-expose port 8787 publicly without TLS authentication. The image runs as the configured
-non-root UID/GID and enables `no-new-privileges`. Telegram status replies may reveal
-filenames; leave them disabled in sensitive chats. Jellyfin keys are read from `.env` only.
+Wizard administrator passwords are hashed with Argon2 and never stored as plaintext. Login
+creates an expiring HttpOnly, SameSite=Strict session cookie; browser state changes require a
+per-session CSRF token. Login failures are rate-limited in memory. Set `TMD_COOKIE_SECURE=true`
+when the application is served exclusively through HTTPS; it defaults to false so direct
+local HTTP remains usable during initial setup.
+
+Telegram API hashes and Jellyfin keys are masked in API responses and stored only in the
+owner-readable (`0600`) persistent settings file when browser-managed. OTPs and Telegram 2FA
+passwords are never persisted. Keep `.env`, settings, sessions, databases, and backups private;
+prefer an HTTPS reverse proxy or Tailscale and never expose port 8787 directly to the public
+internet. The image runs as the configured non-root UID/GID with `no-new-privileges`.
 
 ## 11. Uninstall
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, PrivateAttr, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
     )
+    _explicit_fields: set[str] = PrivateAttr(default_factory=set)
 
     telegram_api_id: int | None = Field(default=None, validation_alias="TELEGRAM_API_ID")
     telegram_api_hash: SecretStr | None = Field(
@@ -74,10 +75,12 @@ class Settings(BaseSettings):
     )
     dashboard_username: str | None = None
     dashboard_password: SecretStr | None = None
+    session_cookie_secure: bool = Field(default=False, validation_alias="TMD_COOKIE_SECURE")
     log_level: str = "INFO"
 
     @model_validator(mode="after")
     def derive_paths(self) -> Settings:
+        self._explicit_fields = set(self.model_fields_set)
         self.session_dir = self.session_dir or self.data_dir / "session"
         self.telegram_session_path = (
             self.telegram_session_path or self.session_dir / self.session_name
@@ -87,6 +90,10 @@ class Settings(BaseSettings):
         self.log_dir = self.log_dir or self.data_dir / "logs"
         self.temp_dir = self.temp_dir or self.download_root / "incomplete"
         return self
+
+    @property
+    def explicit_fields(self) -> set[str]:
+        return set(self._explicit_fields)
 
     @field_validator("session_name")
     @classmethod

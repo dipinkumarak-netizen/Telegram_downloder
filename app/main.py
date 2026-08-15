@@ -7,12 +7,16 @@ import uvicorn
 from fastapi import FastAPI
 
 from app.api.routes import router
+from app.api.setup_routes import router as setup_router
 from app.config import get_settings
 from app.database import Database
 from app.downloader import Downloader
 from app.jellyfin import JellyfinClient
 from app.logging_config import configure_logging
 from app.queue_manager import QueueManager
+from app.services.admin_auth import AdminAuthService
+from app.services.settings_store import RuntimeSettings, SettingsStore
+from app.services.setup import SetupService
 from app.services.telegram_auth import TelegramAuthService
 from app.telegram_client import TelegramService
 
@@ -24,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    store = SettingsStore(settings.config_dir / "settings.json")
+    runtime_settings = RuntimeSettings(settings, store)
+    runtime_settings.apply_persisted()
+    settings.ensure_directories()
     database = Database(settings.database_path)
     await database.initialize()
     queue = QueueManager(database, settings.concurrent_downloads)
@@ -33,6 +41,10 @@ async def lifespan(app: FastAPI):
     app.state.queue = queue
     app.state.telegram = None
     app.state.downloader = None
+    app.state.settings_store = store
+    app.state.runtime_settings = runtime_settings
+    admin_auth = AdminAuthService(store, settings)
+    app.state.admin_auth = admin_auth
 
     async def start_telegram_runtime() -> None:
         current = app.state.telegram
@@ -59,6 +71,9 @@ async def lifespan(app: FastAPI):
         active_client_provider=active_auth_client,
     )
     app.state.telegram_auth = telegram_auth
+    app.state.setup_service = SetupService(
+        settings, store, runtime_settings, admin_auth, telegram_auth
+    )
     if telegram_auth.configured:
         try:
             await start_telegram_runtime()
@@ -78,6 +93,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Telegram Media Downloader", lifespan=lifespan)
 app.include_router(router)
+app.include_router(setup_router)
 
 
 if __name__ == "__main__":

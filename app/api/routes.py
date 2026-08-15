@@ -5,8 +5,8 @@ import shutil
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, SecretStr
@@ -14,10 +14,12 @@ from pydantic import BaseModel, SecretStr
 from app.config import Settings
 from app.database import Database
 from app.queue_manager import QueueManager
+from app.services.admin_auth import AdminAuthService
 from app.services.telegram_auth import TelegramAuthError, TelegramAuthService
 
 router = APIRouter()
 security = HTTPBasic(auto_error=False)
+SESSION_COOKIE = "tmd_admin_session"
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 
@@ -52,6 +54,14 @@ def authenticate(
     request: Request, credentials: HTTPBasicCredentials | None = Depends(security)
 ) -> None:
     settings: Settings = request.app.state.settings
+    admin: AdminAuthService | None = getattr(request.app.state, "admin_auth", None)
+    if admin and admin.session(request.cookies.get(SESSION_COOKIE)):
+        return
+    if admin and admin.configured:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Administrator login required",
+        )
     if not settings.dashboard_username and not settings.dashboard_password:
         return
     valid = bool(
@@ -71,20 +81,39 @@ def authenticate(
         )
 
 
-def require_dashboard_auth(
+def require_admin(
     request: Request, credentials: HTTPBasicCredentials | None = Depends(security)
 ) -> None:
+    admin: AdminAuthService | None = getattr(request.app.state, "admin_auth", None)
+    session = admin.session(request.cookies.get(SESSION_COOKIE)) if admin else None
+    if session:
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            supplied = request.headers.get("X-CSRF-Token", "")
+            if not secrets.compare_digest(supplied, session.csrf_token):
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid CSRF token")
+        return
     settings: Settings = request.app.state.settings
-    if not settings.dashboard_username or not settings.dashboard_password:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Configure dashboard authentication before using Telegram login.",
-        )
+    if admin and not admin.configured and not (
+        settings.dashboard_username and settings.dashboard_password
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Administrator login required")
     authenticate(request, credentials)
 
 
-@router.get("/", response_class=HTMLResponse, dependencies=[Depends(authenticate)])
-async def dashboard(request: Request) -> HTMLResponse:
+@router.get("/", response_class=HTMLResponse)
+async def dashboard(
+    request: Request, credentials: HTTPBasicCredentials | None = Depends(security)
+) -> Response:
+    runtime = getattr(request.app.state, "runtime_settings", None)
+    if runtime is not None and not runtime.setup_completed:
+        return RedirectResponse("/setup", status_code=303)
+    try:
+        authenticate(request, credentials)
+    except HTTPException:
+        admin: AdminAuthService | None = getattr(request.app.state, "admin_auth", None)
+        if admin and admin.configured:
+            return RedirectResponse("/settings", status_code=303)
+        raise
     return templates.TemplateResponse(request=request, name="dashboard.html")
 
 
@@ -112,12 +141,12 @@ async def app_status(request: Request) -> dict[str, object]:
     }
 
 
-@router.get("/api/telegram/status", dependencies=[Depends(require_dashboard_auth)])
+@router.get("/api/telegram/status", dependencies=[Depends(require_admin)])
 async def telegram_status(request: Request) -> dict[str, object]:
     return await auth_service(request).status()
 
 
-@router.post("/api/telegram/auth/send-code", dependencies=[Depends(require_dashboard_auth)])
+@router.post("/api/telegram/auth/send-code", dependencies=[Depends(require_admin)])
 async def telegram_send_code(payload: PhoneRequest, request: Request) -> dict[str, object]:
     try:
         return await auth_service(request).send_code(payload.phone)
@@ -125,7 +154,7 @@ async def telegram_send_code(payload: PhoneRequest, request: Request) -> dict[st
         raise auth_error(exc) from None
 
 
-@router.post("/api/telegram/auth/verify-code", dependencies=[Depends(require_dashboard_auth)])
+@router.post("/api/telegram/auth/verify-code", dependencies=[Depends(require_admin)])
 async def telegram_verify_code(payload: CodeRequest, request: Request) -> dict[str, object]:
     try:
         return await auth_service(request).verify_code(payload.code.get_secret_value())
@@ -133,7 +162,7 @@ async def telegram_verify_code(payload: CodeRequest, request: Request) -> dict[s
         raise auth_error(exc) from None
 
 
-@router.post("/api/telegram/auth/verify-password", dependencies=[Depends(require_dashboard_auth)])
+@router.post("/api/telegram/auth/verify-password", dependencies=[Depends(require_admin)])
 async def telegram_verify_password(
     payload: PasswordRequest, request: Request
 ) -> dict[str, object]:
@@ -143,7 +172,7 @@ async def telegram_verify_password(
         raise auth_error(exc) from None
 
 
-@router.post("/api/telegram/auth/cancel", dependencies=[Depends(require_dashboard_auth)])
+@router.post("/api/telegram/auth/cancel", dependencies=[Depends(require_admin)])
 async def telegram_cancel_auth(request: Request) -> dict[str, bool]:
     return await auth_service(request).cancel()
 

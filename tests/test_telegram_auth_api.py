@@ -7,6 +7,8 @@ from fastapi import FastAPI
 
 from app.api.routes import router
 from app.config import Settings
+from app.services.admin_auth import AdminAuthService
+from app.services.settings_store import SettingsStore
 
 
 class StubAuthService:
@@ -51,6 +53,9 @@ def make_app(tmp_path: Path, *, protected: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.state.settings = Settings(**values)
+    app.state.admin_auth = AdminAuthService(
+        SettingsStore(tmp_path / "config" / "settings.json"), app.state.settings
+    )
     app.state.telegram_auth = StubAuthService()
     return app
 
@@ -62,7 +67,7 @@ async def test_telegram_auth_api_requires_dashboard_authentication(tmp_path: Pat
     ) as client:
         response = await client.get("/api/telegram/status")
 
-    assert response.status_code == 503
+    assert response.status_code == 401
 
 
 async def test_telegram_auth_api_flow_does_not_echo_secrets(tmp_path: Path) -> None:

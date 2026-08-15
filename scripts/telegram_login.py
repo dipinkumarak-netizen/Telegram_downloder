@@ -11,6 +11,8 @@ from app.config import get_settings
 
 async def login() -> None:
     settings = get_settings()
+    if not settings.telegram_api_id or not settings.telegram_api_hash:
+        raise SystemExit("Telegram API credentials are not configured.")
     session = settings.telegram_session_path
     session.parent.mkdir(parents=True, exist_ok=True)
     client = TelegramClient(

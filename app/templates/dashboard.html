@@ -20,7 +20,7 @@
   </style>
 </head>
 <body><main>
-  <div class="head"><h1>Telegram Media Downloader</h1><span id="connection"></span></div>
+  <div class="head"><h1>Telegram Media Downloader</h1><span><a href="/settings" class="muted">Settings</a> &nbsp; <span id="connection"></span></span></div>
   <section class="grid">
     <div class="card"><span class="muted">Queue</span><div class="value" id="queue">—</div></div>
     <div class="card"><span class="muted">Completed</span><div class="value" id="completed">—</div></div>
@@ -85,13 +85,15 @@ jobs.innerHTML=d.jobs.map(j=>`<tr><td>${esc(j.original_filename)}<br><small clas
 events.textContent=d.events.map(e=>`${e.created_at} ${e.level} ${e.message}`).join("\n")}catch(e){connection.innerHTML='<span class="bad">● Dashboard error</span>'}}
 function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}refresh();setInterval(refresh,3000);
 const authSteps=["telegram-not-configured","telegram-phone-step","telegram-code-step","telegram-password-step","telegram-connected-step"];
+let csrfToken=null;
 function showAuthStep(id){authSteps.forEach(step=>document.getElementById(step).style.display=step===id?"block":"none")}
 function authMessage(text,bad=false){const el=document.getElementById("telegram-auth-message");el.textContent=text;el.className=`message ${bad?"bad":"muted"}`}
-async function authRequest(url,payload){const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined});const data=await response.json();if(!response.ok)throw new Error(data.detail?.message||data.detail||"Telegram request failed");return data}
+async function authRequest(url,payload){const headers={"Content-Type":"application/json"};if(csrfToken)headers["X-CSRF-Token"]=csrfToken;const response=await fetch(url,{method:"POST",headers,body:payload?JSON.stringify(payload):undefined});const data=await response.json();if(!response.ok)throw new Error(data.detail?.message||data.detail||"Telegram request failed");return data}
 async function refreshTelegramAuth(){try{const response=await fetch("/api/telegram/status");if(!response.ok)throw new Error("Could not read Telegram status");const data=await response.json();if(!data.configured){showAuthStep("telegram-not-configured");authMessage("Telegram login is unavailable until API credentials are configured.");return}if(data.authorized){showAuthStep("telegram-connected-step");document.getElementById("telegram-account-name").textContent=data.display_name||"Telegram account";document.getElementById("telegram-account-username").textContent=data.username?`@${data.username}`:"";document.getElementById("telegram-account-phone").textContent=data.phone||"";authMessage("Session authorized.");return}if(data.pending_step==="password")showAuthStep("telegram-password-step");else if(data.pending_step==="code")showAuthStep("telegram-code-step");else showAuthStep("telegram-phone-step");authMessage(data.connected?"Ready to connect a Telegram account.":"Telegram is currently disconnected.")}catch(error){authMessage(error.message,true)}}
 document.getElementById("telegram-phone-form").addEventListener("submit",async event=>{event.preventDefault();authMessage("Requesting login code…");try{await authRequest("/api/telegram/auth/send-code",{phone:document.getElementById("telegram-phone").value});document.getElementById("telegram-code").value="";showAuthStep("telegram-code-step");authMessage("Code sent. Enter the code received from Telegram.")}catch(error){authMessage(error.message,true)}});
 document.getElementById("telegram-code-form").addEventListener("submit",async event=>{event.preventDefault();const input=document.getElementById("telegram-code");authMessage("Verifying code…");try{const data=await authRequest("/api/telegram/auth/verify-code",{code:input.value});input.value="";if(data.password_required){showAuthStep("telegram-password-step");authMessage("Telegram two-step verification is enabled. Enter your password.")}else await refreshTelegramAuth()}catch(error){input.value="";authMessage(error.message,true)}});
 document.getElementById("telegram-password-form").addEventListener("submit",async event=>{event.preventDefault();const input=document.getElementById("telegram-password");authMessage("Verifying password…");try{await authRequest("/api/telegram/auth/verify-password",{password:input.value});input.value="";await refreshTelegramAuth()}catch(error){input.value="";authMessage(error.message,true)}});
 document.querySelectorAll(".telegram-cancel").forEach(button=>button.addEventListener("click",async()=>{try{await authRequest("/api/telegram/auth/cancel");document.getElementById("telegram-code").value="";document.getElementById("telegram-password").value="";await refreshTelegramAuth()}catch(error){authMessage(error.message,true)}}));
-refreshTelegramAuth();
+async function initializeTelegramAuth(){try{const response=await fetch("/api/setup/status");if(response.ok){const setup=await response.json();csrfToken=setup.csrf_token||null}}catch(error){}await refreshTelegramAuth()}
+initializeTelegramAuth();
 </script></body></html>
