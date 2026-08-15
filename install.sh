@@ -32,9 +32,8 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 validate_absolute_path() {
   local label="$1" value="$2"
-  [[ "$value" == /* && "$value" != "/" && "$value" != *$'\n'* && \
-    "$value" != *$'\r'* && "$value" != *'$'* && "$value" != *:* ]] ||
-    die "$label must be an absolute path other than / and cannot contain colon or dollar characters."
+  [[ "$value" =~ ^/[A-Za-z0-9._/@+,-]+$ && "$value" != "/" ]] ||
+    die "$label must be an absolute path containing only safe filename characters."
 }
 
 while (($#)); do

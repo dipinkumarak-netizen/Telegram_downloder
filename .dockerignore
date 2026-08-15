@@ -8,4 +8,10 @@ __pycache__
 data
 *.session
 *.session-journal
+*.db
+*.db-wal
+*.db-shm
+settings.json
+logs
+downloads
 tests

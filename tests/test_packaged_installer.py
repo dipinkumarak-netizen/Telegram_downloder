@@ -65,3 +65,74 @@ def test_install_rerun_update_and_safe_uninstall(tmp_path: Path) -> None:
     assert not install_dir.exists()
     assert sentinel.read_text() == "preserve-me"
     assert downloads_dir.is_dir()
+
+
+def test_installer_rejects_unsafe_arguments(tmp_path: Path) -> None:
+    environment = {
+        "TMD_TEST_MODE": "1",
+        "TMD_SOURCE_DIR": str(REPOSITORY),
+        "TMD_INSTALL_DIR": str(tmp_path / "install"),
+        "TMD_UID": str(os.getuid()),
+        "TMD_GID": str(os.getgid()),
+    }
+    for args in (
+        ("--port", "abc"),
+        ("--port", "0"),
+        ("--port", "70000"),
+        ("--data-dir", "/"),
+        ("--downloads-dir", "/"),
+        ("--data-dir", "relative/path"),
+        ("--data-dir", str(tmp_path / "has space")),
+        ("--data-dir", str(tmp_path / "bad;command")),
+        ("--data-dir", ""),
+    ):
+        result = subprocess.run(
+            ["bash", str(REPOSITORY / "install.sh"), *args],
+            cwd=REPOSITORY,
+            env={**os.environ, **environment},
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode != 0, args
+
+
+def test_purge_requires_confirmation_and_exact_marker(tmp_path: Path) -> None:
+    install_dir = tmp_path / "install"
+    data_dir = tmp_path / "state"
+    downloads_dir = tmp_path / "downloads"
+    environment = {
+        "TMD_TEST_MODE": "1",
+        "TMD_SOURCE_DIR": str(REPOSITORY),
+        "TMD_INSTALL_DIR": str(install_dir),
+        "TMD_UID": str(os.getuid()),
+        "TMD_GID": str(os.getgid()),
+    }
+    run_script(
+        REPOSITORY / "install.sh",
+        "--data-dir", str(data_dir),
+        "--downloads-dir", str(downloads_dir),
+        env=environment,
+    )
+    (data_dir / "database" / "downloads.db").write_text("test-db")
+    (downloads_dir / "sample.bin").write_text("test-media")
+
+    cancelled = subprocess.run(
+        ["bash", str(install_dir / "uninstall.sh"), "--purge-data"],
+        cwd=REPOSITORY,
+        env={**os.environ, **environment},
+        input="NO\n",
+        text=True,
+        capture_output=True,
+    )
+    assert cancelled.returncode != 0
+    assert (data_dir / "database" / "downloads.db").exists()
+    assert (downloads_dir / "sample.bin").exists()
+
+    run_script(
+        install_dir / "uninstall.sh",
+        "--purge-data",
+        env=environment,
+        input_text="PURGE\n",
+    )
+    assert not data_dir.exists()
+    assert not downloads_dir.exists()

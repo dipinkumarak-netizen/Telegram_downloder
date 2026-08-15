@@ -1,5 +1,26 @@
 # Telegram Media Downloader
 
+## Packaged release candidate
+
+Release candidate `0.1.0-rc1` supports Ubuntu 24.04 and Debian 12 on amd64 and arm64.
+Install with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dipinkumarak-netizen/Telegram_downloder/main/install.sh | sudo bash
+```
+
+The installer needs internet access and a browser that can reach the server. It installs
+Docker when supported and does not alter firewall or router rules. Open `http://SERVER-IP:8787`
+for the first-run wizard. Use Tailscale or an HTTPS reverse proxy for remote access; direct
+HTTP is intended only for local/LAN setup.
+
+Packaged state is stored in `/var/lib/telegram-media-downloader` and downloads in
+`/srv/telegram-media-downloader/downloads`. Back up the complete state directory, especially
+`config/settings.json`, `database/downloads.db` plus WAL/SHM files, and the session directory.
+Update with `sudo /opt/telegram-media-downloader/update.sh`; uninstall with
+`sudo /opt/telegram-media-downloader/uninstall.sh`; use `--purge-data` only after a verified
+backup and explicit `PURGE` confirmation.
+
 A production-oriented Telegram MTProto downloader for Ubuntu Server, Docker Compose,
 Portainer, and Jellyfin. It watches only configured chats, records every job in SQLite,
 streams files to an `incomplete` directory, atomically moves successful downloads into

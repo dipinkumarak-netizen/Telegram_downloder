@@ -1,5 +1,8 @@
 # Packaged installation
 
+Supported release targets are Ubuntu 24.04 and Debian 12 on amd64 and arm64. The published
+image is multi-architecture; Docker must be able to run the selected architecture.
+
 ## One-command Ubuntu/Debian install
 
 Review `install.sh` before running it, then install from `main`:
@@ -65,3 +68,9 @@ sudo /opt/telegram-media-downloader/uninstall.sh
 This removes the container and packaged release files but preserves data and downloads.
 `--purge-data` requires typing `PURGE` and deletes only the exact paths recorded by the
 installer's management marker. Back up the session, database, settings, and media first.
+
+The installer prepares each bind-mounted directory with the configured UID/GID. A manually
+written Compose file must do the same; an empty root-owned bind mount will correctly fail the
+least-privilege container startup check. The default published port is 8787, bound to all
+host interfaces; use Tailscale or an HTTPS reverse proxy for remote access. The installer does
+not change firewall or router rules. Initial HTTP access is intended for local/LAN setup only.
