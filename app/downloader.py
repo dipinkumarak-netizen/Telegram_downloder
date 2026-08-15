@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 import logging
 import os
 import shutil
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 from telethon.errors import FloodWaitError
@@ -58,7 +58,7 @@ class Downloader:
         destination = unique_destination(
             self.settings.download_root / job.category, job.original_filename
         )
-        part = self.settings.download_root / "incomplete" / f"{job.id}-{destination.name}.part"
+        part = self.settings.temp_dir / f"{job.id}-{destination.name}.part"
         await self.database.transition(
             job_id,
             DownloadState.DOWNLOADING,

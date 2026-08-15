@@ -109,6 +109,7 @@ async def test_process_resumes_existing_partial_download(tmp_path: Path) -> None
     downloader = Downloader(
         settings=SimpleNamespace(
             download_root=tmp_path / "downloads",
+            temp_dir=tmp_path / "downloads" / "incomplete",
             min_free_space_gb=0,
             bandwidth_limit_mbps=0,
             retry_base_seconds=1,

@@ -13,14 +13,21 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${DASHBOARD_PORT:-8787}:8787"
+      - "${TMD_WEB_BIND_ADDRESS:-${DASHBOARD_BIND_IP:-127.0.0.1}}:${TMD_WEB_PORT:-${DASHBOARD_PORT:-8787}}:${TMD_WEB_PORT:-${DASHBOARD_PORT:-8787}}"
     volumes:
-      - /storage/appdata/telegram-downloader/database:/app/database
-      - /storage/appdata/telegram-downloader/session:/app/session
-      - /storage/appdata/telegram-downloader/logs:/app/logs
-      - /storage/media/telegram:/downloads
+      # /storage defaults preserve the current deployment. Fresh installs should set the
+      # TMD_*_HOST_DIR variables (the example file uses project-relative directories).
+      - ${TMD_DATABASE_HOST_DIR:-/storage/appdata/telegram-downloader/database}:/data/db
+      - ${TMD_SESSION_HOST_DIR:-/storage/appdata/telegram-downloader/session}:/data/session
+      - ${TMD_CONFIG_HOST_DIR:-/storage/appdata/telegram-downloader/config}:/data/config
+      - ${TMD_LOG_HOST_DIR:-/storage/appdata/telegram-downloader/logs}:/data/logs
+      - ${TMD_DOWNLOAD_HOST_DIR:-/storage/media/telegram}:/downloads
+      # Transitional aliases keep an existing .env with /app paths fully compatible.
+      - ${TMD_DATABASE_HOST_DIR:-/storage/appdata/telegram-downloader/database}:/app/database
+      - ${TMD_SESSION_HOST_DIR:-/storage/appdata/telegram-downloader/session}:/app/session
+      - ${TMD_LOG_HOST_DIR:-/storage/appdata/telegram-downloader/logs}:/app/logs
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health', timeout=3)"]
+      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('TMD_WEB_PORT', os.getenv('DASHBOARD_PORT', '8787')) + '/health', timeout=3)\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -42,12 +49,12 @@ services:
     ports:
       - "8096:8096"
     volumes:
-      - /storage/appdata/jellyfin/config:/config
-      - /storage/appdata/jellyfin/cache:/cache
-      - /storage/media/telegram/movies:/media/movies:ro
-      - /storage/media/telegram/tv:/media/tv:ro
-      - /storage/media/telegram/videos:/media/videos:ro
-      - /storage/media/telegram/audio:/media/audio:ro
+      - ${JELLYFIN_CONFIG_HOST_DIR:-/storage/appdata/jellyfin/config}:/config
+      - ${JELLYFIN_CACHE_HOST_DIR:-/storage/appdata/jellyfin/cache}:/cache
+      - ${TMD_DOWNLOAD_HOST_DIR:-/storage/media/telegram}/movies:/media/movies:ro
+      - ${TMD_DOWNLOAD_HOST_DIR:-/storage/media/telegram}/tv:/media/tv:ro
+      - ${TMD_DOWNLOAD_HOST_DIR:-/storage/media/telegram}/videos:/media/videos:ro
+      - ${TMD_DOWNLOAD_HOST_DIR:-/storage/media/telegram}/audio:/media/audio:ro
     logging:
       driver: json-file
       options:

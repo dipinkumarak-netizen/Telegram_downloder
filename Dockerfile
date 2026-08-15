@@ -17,7 +17,9 @@ RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 COPY --chown=appuser:appgroup app ./app
 COPY --chown=appuser:appgroup scripts ./scripts
 COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh \
+    && install -d -m 0775 -o appuser -g appgroup \
+        /data/db /data/session /data/config /data/logs /downloads /downloads/incomplete
 USER appuser
 EXPOSE 8787
 ENTRYPOINT ["docker-entrypoint.sh"]

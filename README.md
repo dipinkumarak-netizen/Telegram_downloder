@@ -45,7 +45,7 @@ The command still requires an authorized session. Supergroups/channels normally 
 ## 2. Host setup
 
 ```bash
-cd /home/dipin/projects/telegram-media-downloader
+cd /path/to/telegram-media-downloader
 id
 cp .env.example .env
 nano .env
@@ -66,6 +66,44 @@ not delete existing data. Essential settings are:
 `BANDWIDTH_LIMIT_MBPS=0` is unlimited. The limiter is approximate and applies per download.
 `MAX_FILE_SIZE_GB=0` means unlimited.
 
+## Portable Configuration
+
+All application settings are centralized in `app/config.py`. Precedence is an explicit
+environment variable, a path derived from its application root, then a portable default.
+New deployments use these container paths:
+
+```text
+/data/db/downloads.db          SQLite queue and history
+/data/session/downloader.session
+/data/config                   reserved persistent configuration/state
+/data/logs                     rotating application logs
+/downloads                     completed category directories
+/downloads/incomplete          resumable .part files
+```
+
+The main portable variables are `TMD_DATA_DIR`, `TMD_DATABASE_PATH`, `TMD_SESSION_DIR`,
+`TMD_SESSION_NAME`, `TMD_CONFIG_DIR`, `TMD_LOG_DIR`, `TMD_DOWNLOAD_DIR`, `TMD_TEMP_DIR`,
+`TMD_WEB_HOST`, and `TMD_WEB_PORT`. Compose host paths are independently controlled by
+`TMD_DATABASE_HOST_DIR`, `TMD_SESSION_HOST_DIR`, `TMD_CONFIG_HOST_DIR`,
+`TMD_LOG_HOST_DIR`, and `TMD_DOWNLOAD_HOST_DIR`; host publication uses
+`TMD_WEB_BIND_ADDRESS`. See `.env.example` for the complete interface.
+
+Legacy `DATABASE_PATH`, `TELEGRAM_SESSION_PATH`, `LOG_DIR`, `DOWNLOAD_ROOT`,
+`DASHBOARD_HOST`, `DASHBOARD_PORT`, and `DASHBOARD_BIND_IP` remain supported. Compose keeps
+transitional `/app/database`, `/app/session`, and `/app/logs` mounts so the current `.env`
+continues to resolve existing state. The `/storage` Compose defaults intentionally retain
+the current deployment; fresh installations should copy `.env.example`, whose host mount
+defaults are project-relative.
+
+Telethon receives a session basename and appends `.session`. Preserve that exact file and
+mount its directory persistently. SQLite's database directory, including any WAL/SHM files,
+and the entire media directory must also remain persistent across upgrades. Never run two
+downloader instances against the same database or Telegram session.
+
+The first-run browser setup wizard and browser-based Telegram authentication are planned but
+are not implemented in this phase. Initial Telegram login still uses
+`scripts/telegram_login.py` from a terminal.
+
 ## 3. Build and Telegram login
 
 Build before login so credentials never need to be installed on the host:
@@ -75,9 +113,11 @@ docker compose build telegram-downloader
 docker compose run --rm --entrypoint python telegram-downloader scripts/telegram_login.py
 ```
 
-The script interactively requests phone, OTP, and (when enabled) 2FA password. OTP/password
-input is hidden and never logged. The resulting session persists at
-`/storage/appdata/telegram-downloader/session/downloader.session`.
+The script interactively requests phone (unless `TELEGRAM_PHONE` is configured), OTP, and
+(when enabled) 2FA password. OTP/password input is hidden and never logged. With the portable
+example, the session persists at `/data/session/downloader.session` in the container. The
+current compatibility mount retains
+`/storage/appdata/telegram-downloader/session/downloader.session` on the host.
 
 ## 4. Start and operate
 
@@ -136,7 +176,7 @@ file remains completed.
 ## 7. Updating
 
 ```bash
-cd /home/dipin/projects/telegram-media-downloader
+cd /path/to/telegram-media-downloader
 git pull --ff-only
 docker compose build --pull telegram-downloader
 docker compose up -d telegram-downloader

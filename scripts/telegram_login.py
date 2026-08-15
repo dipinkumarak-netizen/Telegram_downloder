@@ -2,26 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import getpass
-import os
-from pathlib import Path
 
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
+from app.config import get_settings
+
 
 async def login() -> None:
-    api_id_raw = os.environ.get("TELEGRAM_API_ID") or input("Telegram API ID: ").strip()
-    api_hash = os.environ.get("TELEGRAM_API_HASH") or getpass.getpass("Telegram API Hash: ")
-    session = Path(os.environ.get("TELEGRAM_SESSION_PATH", "/app/session/downloader"))
+    settings = get_settings()
+    session = settings.telegram_session_path
     session.parent.mkdir(parents=True, exist_ok=True)
-    client = TelegramClient(str(session), int(api_id_raw), api_hash)
+    client = TelegramClient(
+        str(session), settings.telegram_api_id, settings.telegram_api_hash.get_secret_value()
+    )
     await client.connect()
     try:
         if await client.is_user_authorized():
             me = await client.get_me()
             print(f"Session is already authorized for Telegram user ID {me.id}.")
             return
-        phone = input("Phone number (international format, e.g. +919...): ").strip()
+        phone = settings.telegram_phone or input(
+            "Phone number (international format, e.g. +919...): "
+        ).strip()
         sent = await client.send_code_request(phone)
         code = getpass.getpass("Telegram OTP (input hidden): ").strip()
         try:
