@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
 import os
 import shutil
@@ -108,7 +109,13 @@ class Downloader:
             if not result or not part.exists() or part.stat().st_size <= 0:
                 raise RuntimeError("Telegram returned an empty or missing file")
             destination.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(part, destination)
+            try:
+                os.replace(part, destination)
+            except OSError as exc:
+                if exc.errno != errno.EXDEV:
+                    raise
+                shutil.copy2(part, destination)
+                part.unlink()
             await self.database.transition(
                 job_id,
                 DownloadState.COMPLETED,

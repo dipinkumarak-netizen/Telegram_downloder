@@ -38,6 +38,7 @@ class StorageRequest(BaseModel):
 
 class StoragePathRequest(BaseModel):
     path: str = ""
+    temp_dir: str | None = None
 
 
 class StorageFolderRequest(StoragePathRequest):
@@ -222,9 +223,8 @@ async def save_storage_picker(payload: StoragePathRequest, request: Request) -> 
             raise SetupError("Selected storage folder is not writable.")
         existing = setup_service(request).status
         status_data = await existing()
-        saved = setup_service(request).save_storage(
-            browser.container_path(relative), status_data["temp_dir"]
-        )
+        temp_dir = payload.temp_dir or status_data["temp_dir"]
+        saved = setup_service(request).save_storage(browser.container_path(relative), temp_dir)
         setup_service(request)._store_update("storage", {"host_download_dir": result["host_path"]})
         pending = request.app.state.settings.config_dir / "pending-download-host-dir"
         pending.write_text(result["host_path"] + "\n", encoding="utf-8")
