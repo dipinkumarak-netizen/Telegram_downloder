@@ -210,13 +210,20 @@ async def save_storage_picker(payload: StoragePathRequest, request: Request) -> 
         raise HTTPException(status.HTTP_409_CONFLICT, "Storage cannot change during a download.")
     browser = storage_browser(request)
     try:
-        result = browser.validate(payload.path)
+        relative = payload.path
+        if (
+            relative.startswith("/")
+            and browser.host_root
+            and relative.startswith(str(browser.host_root))
+        ):
+            relative = browser.relative_for_host(relative)
+        result = browser.validate(relative)
         if not result.get("writable"):
             raise SetupError("Selected storage folder is not writable.")
         existing = setup_service(request).status
         status_data = await existing()
         saved = setup_service(request).save_storage(
-            browser.container_path(payload.path), status_data["temp_dir"]
+            browser.container_path(relative), status_data["temp_dir"]
         )
         setup_service(request)._store_update("storage", {"host_download_dir": result["host_path"]})
         saved["host_download_dir"] = result["host_path"]

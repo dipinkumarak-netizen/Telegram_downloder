@@ -34,3 +34,11 @@ def test_unconfigured_root_is_safe():
     browser = StorageBrowser("/does-not-exist", None)
     assert not browser.available
     assert browser.roots() == []
+
+
+def test_host_and_container_paths_are_distinct(tmp_path: Path):
+    root = tmp_path / "mounted"
+    root.mkdir()
+    browser = StorageBrowser(root, "/storage")
+    assert browser.relative_for_host("/storage/media") == "media"
+    assert browser.container_path("media") == str(root / "media")

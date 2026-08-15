@@ -43,6 +43,15 @@ class StorageBrowser:
     def container_path(self, relative: str | None = "") -> str:
         return str(self._safe(relative))
 
+    def relative_for_host(self, value: str) -> str:
+        if self.host_root is None:
+            raise ValueError("Storage browsing is not configured.")
+        candidate = Path(value).expanduser().resolve(strict=False)
+        try:
+            return str(candidate.relative_to(self.host_root))
+        except ValueError as exc:
+            raise ValueError("Storage path is outside the approved root.") from exc
+
     def roots(self) -> list[dict[str, Any]]:
         if not self.available:
             return []

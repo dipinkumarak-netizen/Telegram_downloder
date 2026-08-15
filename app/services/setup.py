@@ -75,6 +75,7 @@ class SetupService:
                 "phone": auth.get("phone"),
             },
             "download_dir": str(storage.get("download_dir") or self.settings.download_root),
+            "host_download_dir": storage.get("host_download_dir"),
             "temp_dir": str(storage.get("temp_dir") or self.settings.temp_dir),
             "storage_configured": bool(
                 storage.get("download_dir") and storage.get("temp_dir")
@@ -116,7 +117,12 @@ class SetupService:
         download = self._validate_directory(download_dir, "Download directory")
         temporary = self._validate_directory(temp_dir, "Temporary directory")
         self._store_update(
-            "storage", {"download_dir": str(download), "temp_dir": str(temporary)}
+            "storage",
+            {
+                "download_dir": str(download),
+                "temp_dir": str(temporary),
+                "host_download_dir": None,
+            },
         )
         if "download_root" not in self.runtime.environment_fields:
             self.settings.download_root = download
@@ -125,6 +131,7 @@ class SetupService:
         return {
             "ok": True,
             "download_dir": str(self.settings.download_root),
+            "host_download_dir": None,
             "temp_dir": str(self.settings.temp_dir),
             "environment_override": bool(
                 {"download_root", "temp_dir"} & self.runtime.environment_fields
