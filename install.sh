@@ -170,6 +170,7 @@ if [[ ! -e "$env_file" ]]; then
     printf 'TMD_BIND_ADDRESS=%s\n' "$BIND_ADDRESS"
     printf 'TMD_DATA_HOST_DIR=%s\n' "$DATA_DIR"
     printf 'TMD_DOWNLOAD_HOST_DIR=%s\n' "$DOWNLOADS_DIR"
+    printf 'TMD_STORAGE_BROWSE_HOST_ROOT=/storage\n'
     printf 'TMD_UID=%s\nTMD_GID=%s\n' "$runtime_uid" "$runtime_gid"
     printf 'TZ=%s\n' "${TZ:-Etc/UTC}"
     printf 'TMD_COOKIE_SECURE=false\n'
@@ -177,6 +178,9 @@ if [[ ! -e "$env_file" ]]; then
   chmod 0600 "$env_file"
   printf 'Created deployment configuration: %s\n' "$env_file"
 else
+  if ! grep -q '^TMD_STORAGE_BROWSE_HOST_ROOT=' "$env_file"; then
+    printf '\nTMD_STORAGE_BROWSE_HOST_ROOT=/storage\n' >> "$env_file"
+  fi
   printf 'Preserved existing deployment configuration: %s\n' "$env_file"
 fi
 

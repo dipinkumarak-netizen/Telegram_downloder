@@ -16,6 +16,7 @@ services:
       TMD_TEMP_DIR: /data/tmp
       TMD_DOWNLOAD_DIR: /downloads
       TMD_STORAGE_BROWSE_CONTAINER_ROOT: /host-storage
+      TMD_STORAGE_BROWSE_HOST_ROOT: ${TMD_STORAGE_BROWSE_HOST_ROOT:-/storage}
       TMD_WEB_HOST: 0.0.0.0
       TMD_WEB_PORT: 8787
       TMD_COOKIE_SECURE: ${TMD_COOKIE_SECURE:-false}

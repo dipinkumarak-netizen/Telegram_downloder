@@ -41,6 +41,11 @@ install -m 0644 "$temporary_dir/VERSION" "$INSTALL_DIR/VERSION"
 install -m 0755 "$temporary_dir/update.sh" "$INSTALL_DIR/update.sh"
 install -m 0755 "$temporary_dir/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
 
+if ! grep -q '^TMD_STORAGE_BROWSE_HOST_ROOT=' "$INSTALL_DIR/.env"; then
+  printf '\nTMD_STORAGE_BROWSE_HOST_ROOT=/storage\n' >> "$INSTALL_DIR/.env"
+  chmod 0600 "$INSTALL_DIR/.env"
+fi
+
 if ((NO_START)) || [[ "$TEST_MODE" == "1" ]]; then
   echo "Release files updated without starting Docker."
   exit 0
