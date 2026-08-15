@@ -22,7 +22,15 @@ fetch_file() {
   if [[ -n "$SOURCE_DIR" ]]; then
     install -m 0644 "$SOURCE_DIR/$relative" "$destination"
   else
-    curl -fsSL "$RAW_BASE/$relative" -o "$destination"
+    printf 'Downloading %s...\n' "$relative"
+    curl --http1.1 \
+      --connect-timeout 10 \
+      --max-time 60 \
+      --retry 3 \
+      --retry-delay 2 \
+      --retry-all-errors \
+      -fsSL "$RAW_BASE/$relative" \
+      -o "$destination"
   fi
 }
 for relative in deploy/docker-compose.yml VERSION scripts/update.sh scripts/uninstall.sh; do

@@ -23,6 +23,18 @@ def read_env(path: Path) -> dict[str, str]:
     return dict(line.split("=", 1) for line in path.read_text().splitlines() if line)
 
 
+def test_release_downloads_have_timeout_retry_and_progress_controls() -> None:
+    for script in (REPOSITORY / "install.sh", REPOSITORY / "scripts/update.sh"):
+        source = script.read_text()
+        assert "--http1.1" in source
+        assert "--connect-timeout 10" in source
+        assert "--max-time 60" in source
+        assert "--retry 3" in source
+        assert "--retry-delay 2" in source
+        assert "--retry-all-errors" in source
+        assert "Downloading %s..." in source
+
+
 def test_install_rerun_update_and_safe_uninstall(tmp_path: Path) -> None:
     install_dir = tmp_path / "opt" / "app"
     data_dir = tmp_path / "state"

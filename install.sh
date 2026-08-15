@@ -132,7 +132,15 @@ fetch_file() {
   if [[ -n "$SOURCE_DIR" ]]; then
     install -m 0644 "$SOURCE_DIR/$relative" "$destination"
   else
-    curl -fsSL "${RAW_BASE}/${RELEASE_REF}/${relative}" -o "$destination"
+    printf 'Downloading %s...\n' "$relative"
+    curl --http1.1 \
+      --connect-timeout 10 \
+      --max-time 60 \
+      --retry 3 \
+      --retry-delay 2 \
+      --retry-all-errors \
+      -fsSL "${RAW_BASE}/${RELEASE_REF}/${relative}" \
+      -o "$destination"
   fi
 }
 
