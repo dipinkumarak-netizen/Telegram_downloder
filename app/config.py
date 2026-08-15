@@ -23,8 +23,10 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    telegram_api_id: int = Field(validation_alias="TELEGRAM_API_ID")
-    telegram_api_hash: SecretStr = Field(validation_alias="TELEGRAM_API_HASH")
+    telegram_api_id: int | None = Field(default=None, validation_alias="TELEGRAM_API_ID")
+    telegram_api_hash: SecretStr | None = Field(
+        default=None, validation_alias="TELEGRAM_API_HASH"
+    )
     telegram_phone: str | None = Field(default=None, validation_alias="TELEGRAM_PHONE")
     telegram_session_path: Path | None = Field(
         default=None, validation_alias="TELEGRAM_SESSION_PATH"

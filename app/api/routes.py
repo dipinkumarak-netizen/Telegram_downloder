@@ -9,10 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, SecretStr
 
 from app.config import Settings
 from app.database import Database
 from app.queue_manager import QueueManager
+from app.services.telegram_auth import TelegramAuthError, TelegramAuthService
 
 router = APIRouter()
 security = HTTPBasic(auto_error=False)
@@ -21,6 +23,29 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 
 def services(request: Request) -> tuple[Settings, Database, QueueManager]:
     return request.app.state.settings, request.app.state.database, request.app.state.queue
+
+
+def auth_service(request: Request) -> TelegramAuthService:
+    return request.app.state.telegram_auth
+
+
+class PhoneRequest(BaseModel):
+    phone: str
+
+
+class CodeRequest(BaseModel):
+    code: SecretStr
+
+
+class PasswordRequest(BaseModel):
+    password: SecretStr
+
+
+def auth_error(exc: TelegramAuthError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.http_status,
+        detail={"code": exc.code, "message": exc.message},
+    )
 
 
 def authenticate(
@@ -46,6 +71,18 @@ def authenticate(
         )
 
 
+def require_dashboard_auth(
+    request: Request, credentials: HTTPBasicCredentials | None = Depends(security)
+) -> None:
+    settings: Settings = request.app.state.settings
+    if not settings.dashboard_username or not settings.dashboard_password:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Configure dashboard authentication before using Telegram login.",
+        )
+    authenticate(request, credentials)
+
+
 @router.get("/", response_class=HTMLResponse, dependencies=[Depends(authenticate)])
 async def dashboard(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request=request, name="dashboard.html")
@@ -57,7 +94,9 @@ async def app_status(request: Request) -> dict[str, object]:
     disk = shutil.disk_usage(settings.download_root)
     return {
         "running": True,
-        "telegram_connected": request.app.state.telegram.connected,
+        "telegram_connected": bool(
+            request.app.state.telegram and request.app.state.telegram.connected
+        ),
         "queue_size": queue.queue.qsize(),
         "disk": {"total": disk.total, "used": disk.used, "free": disk.free},
         "stats": await database.stats(),
@@ -71,6 +110,42 @@ async def app_status(request: Request) -> dict[str, object]:
         ],
         "events": await database.recent_events(),
     }
+
+
+@router.get("/api/telegram/status", dependencies=[Depends(require_dashboard_auth)])
+async def telegram_status(request: Request) -> dict[str, object]:
+    return await auth_service(request).status()
+
+
+@router.post("/api/telegram/auth/send-code", dependencies=[Depends(require_dashboard_auth)])
+async def telegram_send_code(payload: PhoneRequest, request: Request) -> dict[str, object]:
+    try:
+        return await auth_service(request).send_code(payload.phone)
+    except TelegramAuthError as exc:
+        raise auth_error(exc) from None
+
+
+@router.post("/api/telegram/auth/verify-code", dependencies=[Depends(require_dashboard_auth)])
+async def telegram_verify_code(payload: CodeRequest, request: Request) -> dict[str, object]:
+    try:
+        return await auth_service(request).verify_code(payload.code.get_secret_value())
+    except TelegramAuthError as exc:
+        raise auth_error(exc) from None
+
+
+@router.post("/api/telegram/auth/verify-password", dependencies=[Depends(require_dashboard_auth)])
+async def telegram_verify_password(
+    payload: PasswordRequest, request: Request
+) -> dict[str, object]:
+    try:
+        return await auth_service(request).verify_password(payload.password.get_secret_value())
+    except TelegramAuthError as exc:
+        raise auth_error(exc) from None
+
+
+@router.post("/api/telegram/auth/cancel", dependencies=[Depends(require_dashboard_auth)])
+async def telegram_cancel_auth(request: Request) -> dict[str, bool]:
+    return await auth_service(request).cancel()
 
 
 @router.post("/api/downloads/{job_id}/retry", dependencies=[Depends(authenticate)])
@@ -101,5 +176,7 @@ async def clear_history(request: Request) -> dict[str, object]:
 async def health(request: Request) -> dict[str, object]:
     return {
         "status": "ok",
-        "telegram_connected": request.app.state.telegram.connected,
+        "telegram_connected": bool(
+            request.app.state.telegram and request.app.state.telegram.connected
+        ),
     }

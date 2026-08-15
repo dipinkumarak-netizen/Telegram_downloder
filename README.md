@@ -101,8 +101,30 @@ and the entire media directory must also remain persistent across upgrades. Neve
 downloader instances against the same database or Telegram session.
 
 The first-run browser setup wizard and browser-based Telegram authentication are planned but
-are not implemented in this phase. Initial Telegram login still uses
-`scripts/telegram_login.py` from a terminal.
+are separate features. The complete first-run setup wizard is not implemented yet.
+
+## Browser-based Telegram Login
+
+Telegram API credentials must currently be supplied through `TELEGRAM_API_ID` and
+`TELEGRAM_API_HASH`; the browser cannot create or edit them yet. Configure a non-empty
+`DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD`, start the application, and open the dashboard's
+**Telegram account** panel.
+
+1. Enter the account phone number in international format and select **Send Code**.
+2. Enter the OTP delivered by Telegram and select **Verify Code**.
+3. If Telegram two-step verification is enabled, enter its password in the password field.
+4. After authorization, the panel displays the account name, username, masked phone number,
+   and authorized session status.
+
+The OTP, two-step password, API hash, and Telegram phone-code hash are never returned by the
+API or persisted as application settings. Pending browser login state remains server-side,
+allows only one flow at a time, and expires after ten minutes. Successful authorization is
+written by Telethon to the configured persistent session file, which the downloader then
+reopens for normal operation. The terminal `scripts/telegram_login.py` remains available as
+an administrative fallback.
+
+The full first-run browser setup wizard, including API credential entry, will be implemented
+in a later phase.
 
 ## 3. Build and Telegram login
 

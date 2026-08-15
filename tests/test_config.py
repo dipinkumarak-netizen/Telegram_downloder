@@ -79,3 +79,10 @@ def test_defaults_contain_no_production_secrets() -> None:
     assert settings.dashboard_password is None
     assert "dipin" not in repr(settings).lower()
     assert "/storage" not in repr(settings)
+
+
+def test_missing_telegram_credentials_can_load_web_configuration() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.telegram_api_id is None
+    assert settings.telegram_api_hash is None

@@ -13,6 +13,8 @@
     .muted{color:var(--muted)}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #26344c}
     .scroll{overflow:auto}.bar{width:140px;background:#26344c;height:8px;border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
     button{border:0;border-radius:6px;padding:6px 9px;cursor:pointer}.danger{background:var(--bad)}.retry{background:var(--accent)}.secondary{background:#334663;color:#edf4ff}
+    input{width:100%;max-width:380px;margin:6px 0 10px;padding:9px;border:1px solid #40526e;border-radius:6px;background:#0d1728;color:#edf4ff}
+    .auth-step{display:none}.auth-actions{display:flex;gap:8px;align-items:center}.message{min-height:20px}
     .ok{color:var(--good)}.bad{color:var(--bad)}pre{white-space:pre-wrap;max-height:220px;overflow:auto}
     @media(max-width:650px){main{padding:12px}th:nth-child(3),td:nth-child(3){display:none}}
   </style>
@@ -25,6 +27,41 @@
     <div class="card"><span class="muted">Failed</span><div class="value" id="failed">—</div></div>
     <div class="card"><span class="muted">Disk free</span><div class="value" id="disk">—</div></div>
     <div class="card"><span class="muted">Downloaded</span><div class="value" id="total">—</div></div>
+  </section>
+  <section class="card" style="margin-top:12px">
+    <h2>Telegram account</h2>
+    <p id="telegram-auth-message" class="muted message">Checking Telegram session…</p>
+    <div id="telegram-not-configured" class="auth-step">
+      <p class="bad">Telegram API credentials are not configured.</p>
+      <p class="muted">Add TELEGRAM_API_ID and TELEGRAM_API_HASH to the application configuration.</p>
+    </div>
+    <div id="telegram-phone-step" class="auth-step">
+      <form id="telegram-phone-form">
+        <label for="telegram-phone">Phone number in international format</label><br>
+        <input id="telegram-phone" name="phone" type="tel" autocomplete="tel" placeholder="+919876543210" required>
+        <div><button class="retry" type="submit">Send Code</button></div>
+      </form>
+    </div>
+    <div id="telegram-code-step" class="auth-step">
+      <form id="telegram-code-form">
+        <label for="telegram-code">Telegram login code</label><br>
+        <input id="telegram-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required>
+        <div class="auth-actions"><button class="retry" type="submit">Verify Code</button><button class="secondary telegram-cancel" type="button">Cancel</button></div>
+      </form>
+    </div>
+    <div id="telegram-password-step" class="auth-step">
+      <form id="telegram-password-form">
+        <label for="telegram-password">Telegram two-step verification password</label><br>
+        <input id="telegram-password" name="password" type="password" autocomplete="current-password" required>
+        <div class="auth-actions"><button class="retry" type="submit">Verify Password</button><button class="secondary telegram-cancel" type="button">Cancel</button></div>
+      </form>
+    </div>
+    <div id="telegram-connected-step" class="auth-step">
+      <p class="ok">● Telegram account connected</p>
+      <p><span id="telegram-account-name"></span> <span id="telegram-account-username" class="muted"></span></p>
+      <p id="telegram-account-phone" class="muted"></p>
+      <p class="muted">The authorized session is stored in the configured persistent session directory.</p>
+    </div>
   </section>
   <section class="card" style="margin-top:12px"><h2>Downloads</h2><div class="scroll"><table>
     <thead><tr><th>File</th><th>Status</th><th>Progress</th><th>Speed</th><th>Action</th></tr></thead><tbody id="jobs"></tbody>
@@ -47,4 +84,14 @@ queue.textContent=d.queue_size;completed.textContent=c.completed||0;failed.textC
 jobs.innerHTML=d.jobs.map(j=>`<tr><td>${esc(j.original_filename)}<br><small class="muted">${size(j.downloaded_bytes)} / ${size(j.file_size)}</small></td><td>${j.state}</td><td><div class="bar"><i style="width:${j.progress}%"></i></div>${j.progress.toFixed(1)}%</td><td>${size(j.speed_bps)}/s</td><td>${["queued","downloading"].includes(j.state)?`<button class="danger" onclick="action(${j.id},'cancel')">Cancel</button>`:["failed","cancelled"].includes(j.state)?`<button class="retry" onclick="action(${j.id},'retry')">Retry</button>`:""}</td></tr>`).join("");
 events.textContent=d.events.map(e=>`${e.created_at} ${e.level} ${e.message}`).join("\n")}catch(e){connection.innerHTML='<span class="bad">● Dashboard error</span>'}}
 function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}refresh();setInterval(refresh,3000);
+const authSteps=["telegram-not-configured","telegram-phone-step","telegram-code-step","telegram-password-step","telegram-connected-step"];
+function showAuthStep(id){authSteps.forEach(step=>document.getElementById(step).style.display=step===id?"block":"none")}
+function authMessage(text,bad=false){const el=document.getElementById("telegram-auth-message");el.textContent=text;el.className=`message ${bad?"bad":"muted"}`}
+async function authRequest(url,payload){const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined});const data=await response.json();if(!response.ok)throw new Error(data.detail?.message||data.detail||"Telegram request failed");return data}
+async function refreshTelegramAuth(){try{const response=await fetch("/api/telegram/status");if(!response.ok)throw new Error("Could not read Telegram status");const data=await response.json();if(!data.configured){showAuthStep("telegram-not-configured");authMessage("Telegram login is unavailable until API credentials are configured.");return}if(data.authorized){showAuthStep("telegram-connected-step");document.getElementById("telegram-account-name").textContent=data.display_name||"Telegram account";document.getElementById("telegram-account-username").textContent=data.username?`@${data.username}`:"";document.getElementById("telegram-account-phone").textContent=data.phone||"";authMessage("Session authorized.");return}if(data.pending_step==="password")showAuthStep("telegram-password-step");else if(data.pending_step==="code")showAuthStep("telegram-code-step");else showAuthStep("telegram-phone-step");authMessage(data.connected?"Ready to connect a Telegram account.":"Telegram is currently disconnected.")}catch(error){authMessage(error.message,true)}}
+document.getElementById("telegram-phone-form").addEventListener("submit",async event=>{event.preventDefault();authMessage("Requesting login code…");try{await authRequest("/api/telegram/auth/send-code",{phone:document.getElementById("telegram-phone").value});document.getElementById("telegram-code").value="";showAuthStep("telegram-code-step");authMessage("Code sent. Enter the code received from Telegram.")}catch(error){authMessage(error.message,true)}});
+document.getElementById("telegram-code-form").addEventListener("submit",async event=>{event.preventDefault();const input=document.getElementById("telegram-code");authMessage("Verifying code…");try{const data=await authRequest("/api/telegram/auth/verify-code",{code:input.value});input.value="";if(data.password_required){showAuthStep("telegram-password-step");authMessage("Telegram two-step verification is enabled. Enter your password.")}else await refreshTelegramAuth()}catch(error){input.value="";authMessage(error.message,true)}});
+document.getElementById("telegram-password-form").addEventListener("submit",async event=>{event.preventDefault();const input=document.getElementById("telegram-password");authMessage("Verifying password…");try{await authRequest("/api/telegram/auth/verify-password",{password:input.value});input.value="";await refreshTelegramAuth()}catch(error){input.value="";authMessage(error.message,true)}});
+document.querySelectorAll(".telegram-cancel").forEach(button=>button.addEventListener("click",async()=>{try{await authRequest("/api/telegram/auth/cancel");document.getElementById("telegram-code").value="";document.getElementById("telegram-password").value="";await refreshTelegramAuth()}catch(error){authMessage(error.message,true)}}));
+refreshTelegramAuth();
 </script></body></html>
