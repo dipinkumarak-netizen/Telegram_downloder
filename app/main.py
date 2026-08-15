@@ -17,6 +17,7 @@ from app.queue_manager import QueueManager
 from app.services.admin_auth import AdminAuthService
 from app.services.settings_store import RuntimeSettings, SettingsStore
 from app.services.setup import SetupService
+from app.services.storage_browser import StorageBrowser
 from app.services.telegram_auth import TelegramAuthService
 from app.services.telegram_sources import TelegramSourceService
 from app.telegram_client import TelegramService
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     app.state.runtime_settings = runtime_settings
     admin_auth = AdminAuthService(store, settings)
     app.state.admin_auth = admin_auth
+    app.state.storage_browser = StorageBrowser()
 
     async def start_telegram_runtime() -> None:
         current = app.state.telegram

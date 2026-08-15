@@ -36,6 +36,14 @@ class StorageRequest(BaseModel):
     temp_dir: str
 
 
+class StoragePathRequest(BaseModel):
+    path: str = ""
+
+
+class StorageFolderRequest(StoragePathRequest):
+    name: str
+
+
 class JellyfinRequest(BaseModel):
     enabled: bool = False
     url: str | None = None
@@ -158,6 +166,64 @@ async def save_storage(payload: StorageRequest, request: Request) -> dict[str, o
         return setup_service(request).save_storage(payload.download_dir, payload.temp_dir)
     except SetupError as exc:
         raise setup_error(exc) from None
+
+
+def storage_browser(request: Request):
+    return request.app.state.storage_browser
+
+
+@router.get("/api/storage/roots", dependencies=[Depends(require_admin)])
+async def storage_roots(request: Request) -> dict[str, object]:
+    browser = storage_browser(request)
+    return {"available": browser.available, "roots": browser.roots()}
+
+
+@router.get("/api/storage/browse", dependencies=[Depends(require_admin)])
+async def storage_browse(request: Request, path: str = "") -> dict[str, object]:
+    try:
+        return storage_browser(request).browse(path)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+
+@router.post("/api/storage/validate", dependencies=[Depends(require_admin)])
+async def storage_validate(payload: StoragePathRequest, request: Request) -> dict[str, object]:
+    try:
+        return storage_browser(request).validate(payload.path)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+
+@router.post("/api/storage/create-folder", dependencies=[Depends(require_admin)])
+async def storage_create_folder(
+    payload: StorageFolderRequest, request: Request
+) -> dict[str, object]:
+    try:
+        return storage_browser(request).create_folder(payload.path, payload.name)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+
+@router.post("/api/setup/storage-picker", dependencies=[Depends(require_admin)])
+async def save_storage_picker(payload: StoragePathRequest, request: Request) -> dict[str, object]:
+    if request.app.state.queue.active_downloads:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Storage cannot change during a download.")
+    browser = storage_browser(request)
+    try:
+        result = browser.validate(payload.path)
+        if not result.get("writable"):
+            raise SetupError("Selected storage folder is not writable.")
+        existing = setup_service(request).status
+        status_data = await existing()
+        saved = setup_service(request).save_storage(
+            browser.container_path(payload.path), status_data["temp_dir"]
+        )
+        setup_service(request)._store_update("storage", {"host_download_dir": result["host_path"]})
+        saved["host_download_dir"] = result["host_path"]
+        saved["restart_required"] = False
+        return saved
+    except (ValueError, SetupError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
 
 
 @router.post("/api/setup/jellyfin", dependencies=[Depends(require_admin)])

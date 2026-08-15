@@ -180,6 +180,18 @@ remains idle. Source IDs, rather than mutable display names, are persisted in th
 settings file. Existing explicit `ALLOWED_CHAT_IDS` values remain a compatibility fallback
 when no browser-managed source selection exists.
 
+### Storage Picker
+
+The Storage step can browse and validate folders inside the explicitly mounted
+`TMD_STORAGE_BROWSE_HOST_ROOT` (visible in the container as `/host-storage`). The
+packaged Compose default maps `/storage` when that host path exists. The picker
+rejects traversal and symlink escapes and can create one folder level at a time.
+External disks must already be mounted by Linux. The selected host path is stored
+as deployment metadata while the application uses the container path `/downloads`;
+applying a new mount requires a controlled container restart. Existing media is
+never moved. If the drive disappears, storage validation fails and the downloader
+does not fall back to another local directory.
+
 ### Existing deployment compatibility
 
 An installation with explicit Telegram API credentials plus existing dashboard Basic Auth is
