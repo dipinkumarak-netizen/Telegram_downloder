@@ -85,10 +85,10 @@ class Settings(BaseSettings):
         self.telegram_session_path = (
             self.telegram_session_path or self.session_dir / self.session_name
         )
-        self.database_path = self.database_path or self.data_dir / "db" / "downloads.db"
+        self.database_path = self.database_path or self.data_dir / "database" / "downloads.db"
         self.config_dir = self.config_dir or self.data_dir / "config"
         self.log_dir = self.log_dir or self.data_dir / "logs"
-        self.temp_dir = self.temp_dir or self.download_root / "incomplete"
+        self.temp_dir = self.temp_dir or self.data_dir / "tmp"
         return self
 
     @property

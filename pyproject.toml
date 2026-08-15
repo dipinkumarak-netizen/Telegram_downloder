@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "telegram-media-downloader"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Durable Telegram MTProto media downloader with Jellyfin integration"
 requires-python = ">=3.12"
 dependencies = [
@@ -24,6 +24,9 @@ dev = ["pytest>=8.3,<9", "pytest-asyncio>=0.24,<1", "ruff>=0.8,<1"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

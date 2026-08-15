@@ -72,12 +72,12 @@ All application settings are centralized in `app/config.py`; browser-managed set
 stored atomically in `/data/config/settings.json`. New deployments use these container paths:
 
 ```text
-/data/db/downloads.db          SQLite queue and history
+/data/database/downloads.db    SQLite queue and history
 /data/session/downloader.session
-/data/config                   reserved persistent configuration/state
+/data/config                   browser-managed configuration/state
 /data/logs                     rotating application logs
 /downloads                     completed category directories
-/downloads/incomplete          resumable .part files
+/data/tmp                      resumable .part files
 ```
 
 The main portable variables are `TMD_DATA_DIR`, `TMD_DATABASE_PATH`, `TMD_SESSION_DIR`,
@@ -114,7 +114,7 @@ setup is completed:
 7. Complete setup; later visits use the normal dashboard and `/settings` page.
 
 The data/config mount must be persistent. The wizard does not configure Docker bind mounts or
-install host packages; final Linux installer packaging remains future work.
+install host packages. Packaged Ubuntu/Debian instructions are in `docs/INSTALLATION.md`.
 
 ### Configuration precedence
 
@@ -227,15 +227,9 @@ file remains completed.
 
 ## 7. Updating
 
-```bash
-cd /path/to/telegram-media-downloader
-git pull --ff-only
-docker compose build --pull telegram-downloader
-docker compose up -d telegram-downloader
-```
-
-Do not use `latest` blindly for a critical deployment; pin the application commit and,
-if using the bundled Jellyfin service, pin a tested Jellyfin image tag.
+Packaged installations update with `sudo /opt/telegram-media-downloader/update.sh`; see
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md). Source deployments may continue to use a
+fast-forward Git pull and local Compose build.
 
 ## 8. Backup and restore
 
@@ -280,13 +274,10 @@ internet. The image runs as the configured non-root UID/GID with `no-new-privile
 
 ## 11. Uninstall
 
-```bash
-docker compose down
-```
-
-This intentionally preserves all appdata and media. After verifying backups, remove only
-the exact directories yourself if desired; the project supplies no destructive uninstall
-script.
+Packaged installations use `sudo /opt/telegram-media-downloader/uninstall.sh`. Application
+state and downloads are preserved unless the separately confirmed `--purge-data` option is
+used. See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) and [`docs/MIGRATION.md`](docs/MIGRATION.md).
+Source deployments can continue to use `docker compose down`.
 
 ## Known limitations and next steps
 

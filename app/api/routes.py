@@ -11,6 +11,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, SecretStr
 
+from app import __version__
 from app.config import Settings
 from app.database import Database
 from app.queue_manager import QueueManager
@@ -205,6 +206,7 @@ async def clear_history(request: Request) -> dict[str, object]:
 async def health(request: Request) -> dict[str, object]:
     return {
         "status": "ok",
+        "version": __version__,
         "telegram_connected": bool(
             request.app.state.telegram and request.app.state.telegram.connected
         ),

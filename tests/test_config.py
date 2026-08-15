@@ -15,13 +15,13 @@ def test_portable_default_paths() -> None:
     settings = Settings(**FAKE_CREDENTIALS)
 
     assert settings.data_dir == Path("/data")
-    assert settings.database_path == Path("/data/db/downloads.db")
+    assert settings.database_path == Path("/data/database/downloads.db")
     assert settings.session_dir == Path("/data/session")
     assert settings.telegram_session_path == Path("/data/session/downloader")
     assert settings.config_dir == Path("/data/config")
     assert settings.log_dir == Path("/data/logs")
     assert settings.download_root == Path("/downloads")
-    assert settings.temp_dir == Path("/downloads/incomplete")
+    assert settings.temp_dir == Path("/data/tmp")
 
 
 def test_new_environment_overrides_and_derived_paths(monkeypatch) -> None:
@@ -33,10 +33,10 @@ def test_new_environment_overrides_and_derived_paths(monkeypatch) -> None:
 
     settings = Settings(**FAKE_CREDENTIALS)
 
-    assert settings.database_path == Path("/tmp/tmd-state/db/downloads.db")
+    assert settings.database_path == Path("/tmp/tmd-state/database/downloads.db")
     assert settings.telegram_session_path == Path("/tmp/tmd-state/session/portable-account")
     assert settings.download_root == Path("/tmp/tmd-media")
-    assert settings.temp_dir == Path("/tmp/tmd-media/incomplete")
+    assert settings.temp_dir == Path("/tmp/tmd-state/tmp")
     assert settings.dashboard_host == "127.0.0.1"
     assert settings.dashboard_port == 9999
 
@@ -67,7 +67,7 @@ def test_legacy_environment_names_remain_supported(monkeypatch) -> None:
     assert settings.database_path == Path("/legacy/database/downloads.db")
     assert settings.log_dir == Path("/legacy/logs")
     assert settings.download_root == Path("/legacy/downloads")
-    assert settings.temp_dir == Path("/legacy/downloads/incomplete")
+    assert settings.temp_dir == Path("/data/tmp")
     assert settings.dashboard_port == 8989
 
 
