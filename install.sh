@@ -148,10 +148,12 @@ fetch_file deploy/docker-compose.yml "$temporary_dir/docker-compose.yml"
 fetch_file VERSION "$temporary_dir/VERSION"
 fetch_file scripts/update.sh "$temporary_dir/update.sh"
 fetch_file scripts/uninstall.sh "$temporary_dir/uninstall.sh"
+fetch_file scripts/apply-storage.sh "$temporary_dir/apply-storage.sh"
 install -m 0644 "$temporary_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
 install -m 0644 "$temporary_dir/VERSION" "$INSTALL_DIR/VERSION"
 install -m 0755 "$temporary_dir/update.sh" "$INSTALL_DIR/update.sh"
 install -m 0755 "$temporary_dir/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
+install -m 0755 "$temporary_dir/apply-storage.sh" "$INSTALL_DIR/apply-storage.sh"
 
 marker_file="$INSTALL_DIR/.managed-install"
 umask 077

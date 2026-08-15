@@ -33,13 +33,14 @@ fetch_file() {
       -o "$destination"
   fi
 }
-for relative in deploy/docker-compose.yml VERSION scripts/update.sh scripts/uninstall.sh; do
+for relative in deploy/docker-compose.yml VERSION scripts/update.sh scripts/uninstall.sh scripts/apply-storage.sh; do
   fetch_file "$relative" "$temporary_dir/$(basename "$relative")"
 done
 install -m 0644 "$temporary_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
 install -m 0644 "$temporary_dir/VERSION" "$INSTALL_DIR/VERSION"
 install -m 0755 "$temporary_dir/update.sh" "$INSTALL_DIR/update.sh"
 install -m 0755 "$temporary_dir/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
+install -m 0755 "$temporary_dir/apply-storage.sh" "$INSTALL_DIR/apply-storage.sh"
 
 if ! grep -q '^TMD_STORAGE_BROWSE_HOST_ROOT=' "$INSTALL_DIR/.env"; then
   printf '\nTMD_STORAGE_BROWSE_HOST_ROOT=/storage\n' >> "$INSTALL_DIR/.env"

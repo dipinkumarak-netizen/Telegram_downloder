@@ -226,8 +226,12 @@ async def save_storage_picker(payload: StoragePathRequest, request: Request) -> 
             browser.container_path(relative), status_data["temp_dir"]
         )
         setup_service(request)._store_update("storage", {"host_download_dir": result["host_path"]})
+        pending = request.app.state.settings.config_dir / "pending-download-host-dir"
+        pending.write_text(result["host_path"] + "\n", encoding="utf-8")
+        pending.chmod(0o600)
         saved["host_download_dir"] = result["host_path"]
-        saved["restart_required"] = False
+        saved["restart_required"] = True
+        saved["deployment"] = "pending"
         return saved
     except (ValueError, SetupError) as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None

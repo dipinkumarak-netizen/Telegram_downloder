@@ -188,7 +188,8 @@ packaged Compose default maps `/storage` when that host path exists. The picker
 rejects traversal and symlink escapes and can create one folder level at a time.
 External disks must already be mounted by Linux. The selected host path is stored
 as deployment metadata while the application uses the container path `/downloads`;
-applying a new mount requires a controlled container restart. Existing media is
+applying a new mount requires `sudo /opt/telegram-media-downloader/apply-storage.sh`,
+which recreates only the downloader container. Existing media is
 never moved. If the drive disappears, storage validation fails and the downloader
 does not fall back to another local directory.
 
