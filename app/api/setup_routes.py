@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, SecretStr
 
@@ -67,13 +67,40 @@ def setup_error(exc: SetupError | AdminAuthError) -> HTTPException:
 
 
 @router.get("/setup", response_class=HTMLResponse)
-async def setup_page(request: Request) -> HTMLResponse:
+async def setup_page(request: Request) -> Response:
+    service = setup_service(request)
+    if service.runtime.setup_completed:
+        session = admin_service(request).session(request.cookies.get(SESSION_COOKIE))
+        destination = "/settings" if session else "/login"
+        return RedirectResponse(destination, status_code=status.HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(request=request, name="setup.html")
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="setup.html")
+async def settings_page(request: Request) -> Response:
+    service = setup_service(request)
+    if not service.runtime.setup_completed:
+        return RedirectResponse("/setup", status_code=status.HTTP_303_SEE_OTHER)
+    session = admin_service(request).session(request.cookies.get(SESSION_COOKIE))
+    if not session:
+        return RedirectResponse("/login?next=/settings", status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(request=request, name="settings.html")
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: str = "/") -> Response:
+    service = setup_service(request)
+    if not service.runtime.setup_completed:
+        return RedirectResponse("/setup", status_code=status.HTTP_303_SEE_OTHER)
+    destination = next if next in {"/", "/settings"} else "/"
+    session = admin_service(request).session(request.cookies.get(SESSION_COOKIE))
+    if session:
+        return RedirectResponse(destination, status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"next_path": destination},
+    )
 
 
 @router.get("/api/setup/status")

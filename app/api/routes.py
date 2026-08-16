@@ -120,10 +120,7 @@ async def dashboard(
     try:
         authenticate(request, credentials)
     except HTTPException:
-        admin: AdminAuthService | None = getattr(request.app.state, "admin_auth", None)
-        if admin and admin.configured:
-            return RedirectResponse("/settings", status_code=303)
-        raise
+        return RedirectResponse("/login?next=/", status_code=303)
     return templates.TemplateResponse(request=request, name="dashboard.html")
 
 

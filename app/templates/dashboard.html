@@ -20,7 +20,7 @@
   </style>
 </head>
 <body><main>
-  <div class="head"><h1>Telegram Media Downloader</h1><span><a href="/settings" class="muted">Settings</a> &nbsp; <span id="connection"></span></span></div>
+  <div class="head"><h1>Telegram Media Downloader</h1><span><a href="/settings" class="muted">Settings</a> &nbsp; <button class="secondary" id="logout">Log Out</button> &nbsp; <span id="connection"></span></span></div>
   <section class="grid">
     <div class="card"><span class="muted">Queue</span><div class="value" id="queue">—</div></div>
     <div class="card"><span class="muted">Completed</span><div class="value" id="completed">—</div></div>
@@ -79,12 +79,13 @@
 const size=n=>{if(!n)return"0 B";const u=["B","KB","MB","GB","TB"],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),4);return`${(n/1024**i).toFixed(i?1:0)} ${u[i]}`}
 async function action(id,name){await fetch(`/api/downloads/${id}/${name}`,{method:"POST"});refresh()}
 async function clearHistory(){if(!confirm("Clear completed, failed, and cancelled history from the dashboard?"))return;const r=await fetch("/api/history/clear",{method:"POST"});if(!r.ok){connection.innerHTML='<span class="bad">● Clear failed</span>';return}refresh()}
-async function refresh(){try{const r=await fetch("/api/status");if(!r.ok)return;const d=await r.json(),c=d.stats.counts;
+async function refresh(){try{const r=await fetch("/api/status");if(r.status===401){location.assign("/login?next=/");return}if(!r.ok)return;const d=await r.json(),c=d.stats.counts;
 document.querySelector("#connection").innerHTML=d.telegram_connected?'<span class="ok">● Telegram connected</span>':'<span class="bad">● Disconnected</span>';
 queue.textContent=d.queue_size;completed.textContent=c.completed||0;failed.textContent=c.failed||0;document.getElementById("source-count").textContent=d.telegram_sources_selected||0;disk.textContent=size(d.disk.free);total.textContent=size(d.stats.total_downloaded);
 jobs.innerHTML=d.jobs.map(j=>`<tr><td>${esc(j.original_filename)}<br><small class="muted">${size(j.downloaded_bytes)} / ${size(j.file_size)}</small></td><td>${j.state}</td><td><div class="bar"><i style="width:${j.progress}%"></i></div>${j.progress.toFixed(1)}%</td><td>${size(j.speed_bps)}/s</td><td>${["queued","downloading"].includes(j.state)?`<button class="danger" onclick="action(${j.id},'cancel')">Cancel</button>`:["failed","cancelled"].includes(j.state)?`<button class="retry" onclick="action(${j.id},'retry')">Retry</button>`:""}</td></tr>`).join("");
 events.textContent=d.events.map(e=>`${e.created_at} ${e.level} ${e.message}`).join("\n")}catch(e){connection.innerHTML='<span class="bad">● Dashboard error</span>'}}
 function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}refresh();setInterval(refresh,3000);
+document.getElementById("logout").onclick=async()=>{const status=await fetch("/api/setup/status");if(status.status===401){location.assign("/login");return}const data=await status.json();await fetch("/api/admin/logout",{method:"POST",headers:{"X-CSRF-Token":data.csrf_token}});location.assign("/login")};
 const authSteps=["telegram-not-configured","telegram-phone-step","telegram-code-step","telegram-password-step","telegram-connected-step"];
 let csrfToken=null;
 function showAuthStep(id){authSteps.forEach(step=>document.getElementById(step).style.display=step===id?"block":"none")}
