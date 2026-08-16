@@ -51,6 +51,87 @@ def make_app(tmp_path: Path) -> FastAPI:
     return app
 
 
+async def test_fresh_setup_shows_create_admin_after_status_load(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/settings")
+        status_response = await client.get("/api/setup/status")
+
+    assert page.status_code == 200
+    assert status_response.json() == {
+        "setup_completed": False,
+        "admin_configured": False,
+        "authenticated": False,
+        "csrf_token": None,
+    }
+    assert 'id="admin-create" style="display:none"' in page.text
+    assert 'id="admin-login" style="display:none"' in page.text
+    assert "const createRequired=!state.setup_completed&&!state.admin_configured" in page.text
+    assert 'createRequired?"block":"none"' in page.text
+
+
+async def test_completed_setup_shows_login_only_and_existing_login_succeeds(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path)
+    transport = httpx.ASGITransport(app=app)
+    password = "correct-horse-123"
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as setup_client:
+        created = await setup_client.post(
+            "/api/setup/admin",
+            json={
+                "username": "administrator",
+                "password": password,
+                "password_confirmation": password,
+            },
+        )
+    assert created.status_code == 200
+    app.state.setup_service.store.set_setup_completed(True)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/settings")
+        before_login = await client.get("/api/setup/status")
+        forbidden = await client.post(
+            "/api/setup/admin",
+            json={
+                "username": "replacement",
+                "password": "replacement-password-123",
+                "password_confirmation": "replacement-password-123",
+            },
+        )
+        logged_in = await client.post(
+            "/api/admin/login",
+            json={"username": "administrator", "password": password},
+        )
+        after_login = await client.get("/api/setup/status")
+
+    assert before_login.json() == {
+        "setup_completed": True,
+        "admin_configured": True,
+        "authenticated": False,
+        "csrf_token": None,
+    }
+    assert 'id="admin-create" style="display:none"' in page.text
+    assert 'id="admin-login" style="display:none"' in page.text
+    assert 'state.authenticated?"Application Settings":"Administrator Login"' in page.text
+    assert (
+        'document.getElementById("wizard-actions").style.display=loginRequired?"none":"flex"'
+        in page.text
+    )
+    assert 'if(state.setup_completed)return' in page.text
+    assert forbidden.status_code == 403
+    assert logged_in.status_code == 200
+    assert after_login.json()["setup_completed"] is True
+    assert after_login.json()["admin_configured"] is True
+    assert after_login.json()["authenticated"] is True
+    assert "storage_configured" in after_login.json()
+    assert 'data-step="3"' in page.text
+    assert 'id="storage-parent"' in page.text
+    assert 'id="storage-create"' in page.text
+    assert 'step=state.authenticated&&location.pathname==="/settings"?3:1' in page.text
+
+
 async def test_setup_configuration_requires_session_and_csrf(tmp_path: Path) -> None:
     app = make_app(tmp_path)
     transport = httpx.ASGITransport(app=app)
