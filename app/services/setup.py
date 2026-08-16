@@ -78,6 +78,7 @@ class SetupService:
             "host_download_dir": storage.get("host_download_dir"),
             "host_incomplete_dir": storage.get("host_incomplete_dir"),
             "storage_root": storage.get("storage_root"),
+            "storage_display_name": storage.get("storage_display_name"),
             "temp_dir": str(storage.get("temp_dir") or self.settings.temp_dir),
             "storage_configured": bool(
                 storage.get("download_dir") and storage.get("temp_dir")
@@ -134,6 +135,26 @@ class SetupService:
             "ok": True,
             "download_dir": str(self.settings.download_root),
             "host_download_dir": None,
+            "temp_dir": str(self.settings.temp_dir),
+            "environment_override": bool(
+                {"download_root", "temp_dir"} & self.runtime.environment_fields
+            ),
+        }
+
+    def save_managed_storage(self) -> dict[str, Any]:
+        """Persist fixed container paths after the disk service validates the host root."""
+        download = Path("/downloads")
+        temporary = Path("/incomplete")
+        self._store_update(
+            "storage", {"download_dir": str(download), "temp_dir": str(temporary)}
+        )
+        if "download_root" not in self.runtime.environment_fields:
+            self.settings.download_root = download
+        if "temp_dir" not in self.runtime.environment_fields:
+            self.settings.temp_dir = temporary
+        return {
+            "ok": True,
+            "download_dir": str(self.settings.download_root),
             "temp_dir": str(self.settings.temp_dir),
             "environment_override": bool(
                 {"download_root", "temp_dir"} & self.runtime.environment_fields

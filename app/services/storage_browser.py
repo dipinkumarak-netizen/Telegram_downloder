@@ -5,153 +5,124 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+MEDIA_CATEGORIES = (
+    "movies",
+    "tv",
+    "videos",
+    "audio",
+    "images",
+    "documents",
+    "archives",
+    "other",
+)
+FORBIDDEN_ROOTS = {
+    Path("/"),
+    Path("/etc"),
+    Path("/home"),
+    Path("/root"),
+    Path("/proc"),
+    Path("/sys"),
+    Path("/dev"),
+    Path("/run"),
+    Path("/var/lib/docker"),
+}
+
 
 class StorageBrowser:
-    """Browse only the explicitly mounted storage tree exposed to the container."""
+    """Discover and select only explicitly approved mounted storage roots."""
 
     def __init__(
-        self, container_root: str | Path | None = None, host_root: str | Path | None = None
+        self,
+        container_root: str | Path | None = None,
+        host_root: str | Path | None = None,
+        display_name: str | None = None,
     ) -> None:
         self.container_root = Path(
             container_root or os.environ.get("TMD_STORAGE_BROWSE_CONTAINER_ROOT", "/host-storage")
         ).resolve()
         configured_host = host_root or os.environ.get("TMD_STORAGE_BROWSE_HOST_ROOT", "")
-        self.host_root = Path(configured_host).expanduser().resolve() if configured_host else None
+        self.host_root = (
+            Path(configured_host).expanduser().resolve(strict=False) if configured_host else None
+        )
+        self.display_name = (
+            display_name or os.environ.get("TMD_STORAGE_DISPLAY_NAME", "") or "Storage Disk"
+        ).strip()
 
     @property
     def available(self) -> bool:
-        return self.host_root is not None and self.container_root.is_dir()
-
-    def _safe(self, relative: str | None = "") -> Path:
-        if not self.available:
-            raise ValueError("Storage browsing is not configured.")
-        value = (relative or "").strip()
-        if "\x00" in value:
-            raise ValueError("Invalid storage path.")
-        candidate = (self.container_root / value.lstrip("/")).resolve(strict=False)
-        try:
-            candidate.relative_to(self.container_root)
-        except ValueError as exc:
-            raise ValueError("Storage path is outside the approved root.") from exc
-        return candidate
-
-    def _host_path(self, path: Path) -> str:
-        assert self.host_root is not None
-        relative = path.relative_to(self.container_root)
-        return str(self.host_root / relative)
-
-    def container_path(self, relative: str | None = "") -> str:
-        return str(self._safe(relative))
-
-    def relative_for_host(self, value: str) -> str:
-        if self.host_root is None:
-            raise ValueError("Storage browsing is not configured.")
-        candidate = Path(value).expanduser().resolve(strict=False)
-        try:
-            return str(candidate.relative_to(self.host_root))
-        except ValueError as exc:
-            raise ValueError("Storage path is outside the approved root.") from exc
+        return (
+            self.host_root is not None
+            and self.host_root.is_absolute()
+            and self.host_root not in FORBIDDEN_ROOTS
+            and self.container_root.is_dir()
+        )
 
     def roots(self) -> list[dict[str, Any]]:
+        """Return approved roots themselves; never enumerate their contents."""
         if not self.available:
             return []
-        return [self._metadata(self.container_root, "")] if self.container_root.is_dir() else []
+        return [self._metadata()]
 
-    def prepare_disk(self, relative: str | None = "") -> dict[str, Any]:
-        disk = self._safe(relative)
-        if not disk.is_dir() or not os.access(disk, os.W_OK):
-            raise ValueError("Selected storage is unavailable or not writable.")
-        base = disk / "telegram-media-downloader"
-        downloads = base / "downloads"
-        incomplete = base / "incomplete"
-        for path in (base, downloads, incomplete):
-            path.mkdir(exist_ok=True)
-        categories = (
-            "movies",
-            "tv",
-            "videos",
-            "audio",
-            "images",
-            "documents",
-            "archives",
-            "other",
-        )
-        for category in categories:
-            (downloads / category).mkdir(exist_ok=True)
+    def prepare_disk(self, host_path: str) -> dict[str, Any]:
+        """Create the managed layout after an exact approved-root selection."""
+        if not self.available or self.host_root is None:
+            raise ValueError("Selected storage disk is unavailable.")
+        if host_path != str(self.host_root):
+            raise ValueError("Storage selection must be an approved disk root.")
+        if not self.container_root.is_dir() or not os.access(self.container_root, os.W_OK):
+            raise ValueError("Selected storage disk is unavailable or not writable.")
+
+        application_root = self.container_root / "telegram-media-downloader"
+        downloads = application_root / "downloads"
+        incomplete = application_root / "incomplete"
+        try:
+            for path in (application_root, downloads, incomplete):
+                path.mkdir(exist_ok=True)
+            for category in MEDIA_CATEGORIES:
+                (downloads / category).mkdir(exist_ok=True)
+        except OSError as exc:
+            raise ValueError("Selected storage disk is unavailable or not writable.") from exc
+
+        host_application_root = self.host_root / "telegram-media-downloader"
         return {
-            "host_root": self._host_path(disk),
-            "host_download_dir": self._host_path(downloads),
-            "host_incomplete_dir": self._host_path(incomplete),
+            "display_name": self.display_name,
+            "storage_root": str(self.host_root),
+            "application_root": str(host_application_root),
+            "host_download_dir": str(host_application_root / "downloads"),
+            "host_incomplete_dir": str(host_application_root / "incomplete"),
             "download_dir": "/downloads",
             "temp_dir": "/incomplete",
         }
 
-    def browse(self, relative: str | None = "") -> dict[str, Any]:
-        path = self._safe(relative)
-        if not path.is_dir():
-            raise ValueError("Storage folder is unavailable.")
-        folders = []
+    def _filesystem(self) -> str | None:
+        """Read the filesystem type for the container-visible approved mount when available."""
         try:
-            for child in sorted(path.iterdir(), key=lambda item: item.name.casefold()):
-                if child.is_dir() and not child.is_symlink():
-                    folders.append(
-                        self._metadata(child, str(child.relative_to(self.container_root)))
-                    )
-        except OSError as exc:
-            raise ValueError("Storage folder cannot be read.") from exc
-        parent = None
-        if path != self.container_root:
-            parent = str(path.parent.relative_to(self.container_root))
-        return {
-            "current": self._metadata(path, str(path.relative_to(self.container_root))),
-            "parent": parent,
-            "folders": folders,
-        }
+            target = str(self.container_root)
+            best: tuple[int, str] | None = None
+            for line in Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+                left, right = line.split(" - ", 1)
+                mountpoint = left.split()[4].replace("\\040", " ")
+                if target == mountpoint or target.startswith(mountpoint.rstrip("/") + "/"):
+                    filesystem = right.split()[0]
+                    candidate = (len(mountpoint), filesystem)
+                    if best is None or candidate[0] > best[0]:
+                        best = candidate
+            return best[1] if best else None
+        except (OSError, ValueError, IndexError):
+            return None
 
-    def validate(self, relative: str | None = "") -> dict[str, Any]:
-        path = self._safe(relative)
-        if not path.is_dir():
-            return {"writable": False, "reason": "Folder is unavailable."}
-        probe = path / ".tmd-write-probe"
+    def _metadata(self) -> dict[str, Any]:
         try:
-            probe.write_bytes(b"")
-            probe.unlink()
-            writable = True
-        except OSError:
-            writable = False
-        return {
-            "writable": writable,
-            "free_bytes": shutil.disk_usage(path).free,
-            "host_path": self._host_path(path),
-        }
-
-    def create_folder(self, relative: str, name: str) -> dict[str, Any]:
-        if not name or name in {".", ".."} or any(char in name for char in "/\\\x00\r\n\t"):
-            raise ValueError("Folder name is invalid.")
-        parent = self._safe(relative)
-        if not parent.is_dir():
-            raise ValueError("Parent folder is unavailable.")
-        target = self._safe(str(Path(relative or "") / name))
-        try:
-            target.mkdir()
-        except FileExistsError as exc:
-            raise ValueError("Folder already exists.") from exc
-        except OSError as exc:
-            raise ValueError("Folder could not be created.") from exc
-        return self._metadata(target, str(target.relative_to(self.container_root)))
-
-    def _metadata(self, path: Path, relative: str) -> dict[str, Any]:
-        try:
-            usage = shutil.disk_usage(path)
-            writable = os.access(path, os.W_OK)
+            usage = shutil.disk_usage(self.container_root)
+            writable = os.access(self.container_root, os.W_OK)
         except OSError:
             usage = None
             writable = False
         return {
-            "name": path.name or (self.host_root.name if self.host_root else "Storage"),
-            "path": relative,
-            "host_path": self._host_path(path),
+            "display_name": self.display_name,
+            "mount_path": str(self.host_root),
             "total_bytes": usage.total if usage else None,
             "free_bytes": usage.free if usage else None,
             "writable": writable,
+            "filesystem": self._filesystem(),
         }

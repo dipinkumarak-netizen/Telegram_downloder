@@ -11,6 +11,7 @@ from app.config import Settings
 from app.services.admin_auth import AdminAuthService
 from app.services.settings_store import RuntimeSettings, SettingsStore
 from app.services.setup import SetupService
+from app.services.storage_browser import StorageBrowser
 
 
 class FakeTelegramAuth:
@@ -48,6 +49,9 @@ def make_app(tmp_path: Path) -> FastAPI:
     app.state.telegram_auth = telegram
     app.state.telegram = None
     app.state.queue = SimpleNamespace(active_downloads=0)
+    storage = tmp_path / "mounted-storage"
+    storage.mkdir()
+    app.state.storage_browser = StorageBrowser(storage, "/storage", "External HDD")
     return app
 
 
@@ -127,8 +131,10 @@ async def test_completed_setup_shows_login_only_and_existing_login_succeeds(
     assert after_login.json()["authenticated"] is True
     assert "storage_configured" in after_login.json()
     assert 'data-step="3"' in page.text
-    assert 'id="storage-parent"' in page.text
-    assert 'id="storage-create"' in page.text
+    assert 'id="change-storage"' in page.text
+    assert 'id="storage-parent"' not in page.text
+    assert 'id="storage-create"' not in page.text
+    assert "manual-download-dir" not in page.text
     assert 'step=state.authenticated&&location.pathname==="/settings"?3:1' in page.text
 
 
@@ -164,6 +170,48 @@ async def test_setup_configuration_requires_session_and_csrf(tmp_path: Path) -> 
     assert "fake-hash" not in saved.text
 
 
+async def test_disk_selection_api_returns_only_root_and_persists_after_reload(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path)
+    (tmp_path / "mounted-storage" / "not-a-disk").mkdir()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/api/setup/admin",
+            json={
+                "username": "administrator",
+                "password": "correct-horse-123",
+                "password_confirmation": "correct-horse-123",
+            },
+        )
+        headers = {"X-CSRF-Token": created.json()["csrf_token"]}
+        disks = await client.get("/api/storage/disks")
+        arbitrary = await client.post(
+            "/api/setup/storage-disk",
+            json={"mount_path": "/storage/not-a-disk"},
+            headers=headers,
+        )
+        selected = await client.post(
+            "/api/setup/storage-disk", json={"mount_path": "/storage"}, headers=headers
+        )
+        reloaded = await client.get("/api/setup/status")
+
+    assert [disk["mount_path"] for disk in disks.json()["disks"]] == ["/storage"]
+    assert "not-a-disk" not in disks.text
+    assert disks.json()["disks"][0]["total_bytes"] > 0
+    assert disks.json()["disks"][0]["free_bytes"] > 0
+    assert arbitrary.status_code == 400
+    assert selected.json()["host_download_dir"] == (
+        "/storage/telegram-media-downloader/downloads"
+    )
+    assert selected.json()["host_incomplete_dir"] == (
+        "/storage/telegram-media-downloader/incomplete"
+    )
+    assert reloaded.json()["storage_root"] == "/storage"
+    assert reloaded.json()["storage_display_name"] == "External HDD"
+
+
 async def test_setup_completion_locks_admin_creation(tmp_path: Path) -> None:
     app = make_app(tmp_path)
     transport = httpx.ASGITransport(app=app)
@@ -183,13 +231,8 @@ async def test_setup_completion_locks_admin_creation(tmp_path: Path) -> None:
             json={"api_id": 12345, "api_hash": "fake-hash"},
             headers=headers,
         )
-        await client.post(
-            "/api/setup/storage",
-            json={
-                "download_dir": str(tmp_path / "media"),
-                "temp_dir": str(tmp_path / "incomplete"),
-            },
-            headers=headers,
+        app.state.setup_service.save_storage(
+            str(tmp_path / "downloads"), str(tmp_path / "incomplete")
         )
         completed = await client.post("/api/setup/complete", headers=headers)
         second_admin = await client.post(

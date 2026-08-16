@@ -31,18 +31,8 @@ class TelegramConfigRequest(BaseModel):
     api_hash: SecretStr
 
 
-class StorageRequest(BaseModel):
-    download_dir: str
-    temp_dir: str
-
-
-class StoragePathRequest(BaseModel):
-    path: str = ""
-    temp_dir: str | None = None
-
-
-class StorageFolderRequest(StoragePathRequest):
-    name: str
+class StorageDiskRequest(BaseModel):
+    mount_path: str
 
 
 class JellyfinRequest(BaseModel):
@@ -100,6 +90,11 @@ async def setup_status(request: Request) -> dict[str, object]:
     }
     if session:
         base.update(await service.status())
+        selected_root = base.get("storage_root")
+        available_roots = storage_browser(request).roots()
+        base["storage_available"] = any(
+            disk["mount_path"] == selected_root and disk["writable"] for disk in available_roots
+        )
     return base
 
 
@@ -159,81 +154,42 @@ async def save_telegram(payload: TelegramConfigRequest, request: Request) -> dic
         raise setup_error(exc) from None
 
 
-@router.post("/api/setup/storage", dependencies=[Depends(require_admin)])
-async def save_storage(payload: StorageRequest, request: Request) -> dict[str, object]:
-    if request.app.state.queue.active_downloads:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Storage cannot change during a download.")
-    try:
-        return setup_service(request).save_storage(payload.download_dir, payload.temp_dir)
-    except SetupError as exc:
-        raise setup_error(exc) from None
-
-
 def storage_browser(request: Request):
     return request.app.state.storage_browser
 
 
-@router.get("/api/storage/roots", dependencies=[Depends(require_admin)])
-async def storage_roots(request: Request) -> dict[str, object]:
+@router.get("/api/storage/disks", dependencies=[Depends(require_admin)])
+async def storage_disks(request: Request) -> dict[str, object]:
     browser = storage_browser(request)
-    return {"available": browser.available, "roots": browser.roots()}
+    return {"available": browser.available, "disks": browser.roots()}
 
 
-@router.get("/api/storage/browse", dependencies=[Depends(require_admin)])
-async def storage_browse(request: Request, path: str = "") -> dict[str, object]:
-    try:
-        return storage_browser(request).browse(path)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
-
-
-@router.post("/api/storage/validate", dependencies=[Depends(require_admin)])
-async def storage_validate(payload: StoragePathRequest, request: Request) -> dict[str, object]:
-    try:
-        return storage_browser(request).validate(payload.path)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
-
-
-@router.post("/api/storage/create-folder", dependencies=[Depends(require_admin)])
-async def storage_create_folder(
-    payload: StorageFolderRequest, request: Request
-) -> dict[str, object]:
-    try:
-        return storage_browser(request).create_folder(payload.path, payload.name)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
-
-
-@router.post("/api/setup/storage-picker", dependencies=[Depends(require_admin)])
-async def save_storage_picker(payload: StoragePathRequest, request: Request) -> dict[str, object]:
+@router.post("/api/setup/storage-disk", dependencies=[Depends(require_admin)])
+async def save_storage_disk(payload: StorageDiskRequest, request: Request) -> dict[str, object]:
     if request.app.state.queue.active_downloads:
         raise HTTPException(status.HTTP_409_CONFLICT, "Storage cannot change during a download.")
     browser = storage_browser(request)
     try:
-        relative = payload.path
-        if (
-            relative.startswith("/")
-            and browser.host_root
-            and relative.startswith(str(browser.host_root))
-        ):
-            relative = browser.relative_for_host(relative)
-        result = browser.prepare_disk(relative)
-        saved = setup_service(request).save_storage(result["download_dir"], result["temp_dir"])
+        result = browser.prepare_disk(payload.mount_path)
+        saved = setup_service(request).save_managed_storage()
         setup_service(request)._store_update(
             "storage",
             {
                 "host_download_dir": result["host_download_dir"],
                 "host_incomplete_dir": result["host_incomplete_dir"],
-                "storage_root": result["host_root"],
+                "storage_root": result["storage_root"],
+                "storage_display_name": result["display_name"],
             },
         )
         pending = request.app.state.settings.config_dir / "pending-download-host-dir"
-        pending.write_text(result["host_root"] + "\n", encoding="utf-8")
+        pending.parent.mkdir(parents=True, exist_ok=True)
+        pending.write_text(result["storage_root"] + "\n", encoding="utf-8")
         pending.chmod(0o600)
         saved["host_download_dir"] = result["host_download_dir"]
         saved["host_incomplete_dir"] = result["host_incomplete_dir"]
         saved["temp_dir"] = result["temp_dir"]
+        saved["storage_root"] = result["storage_root"]
+        saved["storage_display_name"] = result["display_name"]
         saved["restart_required"] = True
         saved["deployment"] = "pending"
         return saved

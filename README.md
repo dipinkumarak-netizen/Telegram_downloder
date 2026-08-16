@@ -182,16 +182,15 @@ when no browser-managed source selection exists.
 
 ### Storage Picker
 
-The Storage step can browse and validate folders inside the explicitly mounted
-`TMD_STORAGE_BROWSE_HOST_ROOT` (visible in the container as `/host-storage`). The
-packaged Compose default maps `/storage` when that host path exists. The picker
-rejects traversal and symlink escapes and can create one folder level at a time.
-External disks must already be mounted by Linux. The selected host path is stored
-as deployment metadata while the application uses the container path `/downloads`;
+The Storage step lists only the explicitly approved mounted disk root configured by
+`TMD_STORAGE_BROWSE_HOST_ROOT` (visible in the container as `/host-storage`). It never lists
+subdirectories or accepts a manually entered path. Selecting the disk creates managed
+`telegram-media-downloader/downloads` and `telegram-media-downloader/incomplete` directories,
+including the media category directories. The application uses `/downloads` and `/incomplete`;
 applying a new mount requires `sudo /opt/telegram-media-downloader/apply-storage.sh`,
 which recreates only the downloader container. Existing media is
-never moved. If the drive disappears, storage validation fails and the downloader
-does not fall back to another local directory.
+never moved. Compose refuses to create missing bind-source paths, and the apply script verifies
+that the approved disk is mounted, so an unavailable drive cannot fall back to the system disk.
 
 ### Existing deployment compatibility
 

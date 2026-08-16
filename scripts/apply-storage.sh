@@ -9,7 +9,8 @@ root="$(env_value TMD_STORAGE_BROWSE_HOST_ROOT)"; root="${root:-/storage}"
 pending="$data_dir/config/pending-download-host-dir"; [[ -f "$pending" ]] || { echo "No pending storage selection." >&2; exit 1; }
 selected="$(head -n 1 "$pending")"; root_real="$(realpath -e -- "$root")" || { echo "Selected storage is unavailable. No changes were applied." >&2; exit 1; }; selected_real="$(realpath -e -- "$selected")" || { echo "Selected storage is unavailable. No changes were applied." >&2; exit 1; }
 [[ -d "$selected_real" && -w "$selected_real" && "$selected_real" != "/" ]] || { echo "Selected storage is unavailable. No changes were applied." >&2; exit 1; }
-case "$selected_real" in "$root_real"|"$root_real"/*) ;; *) echo "Selected storage is outside the approved root." >&2; exit 1 ;; esac
+[[ "$selected_real" == "$root_real" ]] || { echo "Storage selection must be an approved disk root." >&2; exit 1; }
+mountpoint -q -- "$root_real" || { echo "Selected storage disk is not mounted. No changes were applied." >&2; exit 1; }
 case "$selected_real" in /etc|/proc|/sys|/dev|/run|/var/lib/docker|/home) echo "Invalid selected storage." >&2; exit 1 ;; esac
 download_host="$selected_real/telegram-media-downloader/downloads"
 incomplete_host="$selected_real/telegram-media-downloader/incomplete"
