@@ -16,7 +16,7 @@ if [[ ! "$PUID" =~ ^[0-9]+$ || ! "$PGID" =~ ^[0-9]+$ ]]; then
 fi
 
 install -d -m 0775 -o "$PUID" -g "$PGID" \
-  "$APPDATA/db" "$APPDATA/session" "$APPDATA/config" "$APPDATA/logs" \
+  "$APPDATA/database" "$APPDATA/session" "$APPDATA/config" "$APPDATA/logs" \
   "$MEDIA/movies" "$MEDIA/tv" "$MEDIA/videos" "$MEDIA/audio" \
   "$MEDIA/images" "$MEDIA/documents" "$MEDIA/archives" "$MEDIA/other" \
   "$MEDIA/incomplete"

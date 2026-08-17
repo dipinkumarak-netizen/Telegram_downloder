@@ -86,3 +86,18 @@ def test_missing_telegram_credentials_can_load_web_configuration() -> None:
 
     assert settings.telegram_api_id is None
     assert settings.telegram_api_hash is None
+
+
+def test_database_volume_mount_and_scripts_match_default_path() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    settings = Settings(**FAKE_CREDENTIALS)
+    expected_container_db_dir = str(settings.database_path.parent)
+
+    docker_compose_text = (repository / "docker-compose.yml").read_text(encoding="utf-8")
+    assert f":{expected_container_db_dir}" in docker_compose_text
+    assert ":/data/db" not in docker_compose_text
+
+    setup_script_text = (repository / "scripts/setup.sh").read_text(encoding="utf-8")
+    assert "$APPDATA/database" in setup_script_text
+    assert "$APPDATA/db" not in setup_script_text
+

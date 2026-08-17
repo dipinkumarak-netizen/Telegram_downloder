@@ -19,6 +19,14 @@ def run_script(script: Path, *args: str, env: dict[str, str], input_text: str | 
     )
 
 
+def _current_uid() -> str:
+    return str(os.getuid()) if hasattr(os, "getuid") else "1000"
+
+
+def _current_gid() -> str:
+    return str(os.getgid()) if hasattr(os, "getgid") else "1000"
+
+
 def read_env(path: Path) -> dict[str, str]:
     return dict(line.split("=", 1) for line in path.read_text().splitlines() if line)
 
@@ -43,8 +51,8 @@ def test_install_rerun_update_and_safe_uninstall(tmp_path: Path) -> None:
         "TMD_TEST_MODE": "1",
         "TMD_SOURCE_DIR": str(REPOSITORY),
         "TMD_INSTALL_DIR": str(install_dir),
-        "TMD_UID": str(os.getuid()),
-        "TMD_GID": str(os.getgid()),
+        "TMD_UID": _current_uid(),
+        "TMD_GID": _current_gid(),
     }
     run_script(
         REPOSITORY / "install.sh",
@@ -84,8 +92,8 @@ def test_installer_rejects_unsafe_arguments(tmp_path: Path) -> None:
         "TMD_TEST_MODE": "1",
         "TMD_SOURCE_DIR": str(REPOSITORY),
         "TMD_INSTALL_DIR": str(tmp_path / "install"),
-        "TMD_UID": str(os.getuid()),
-        "TMD_GID": str(os.getgid()),
+        "TMD_UID": _current_uid(),
+        "TMD_GID": _current_gid(),
     }
     for args in (
         ("--port", "abc"),
@@ -116,8 +124,8 @@ def test_purge_requires_confirmation_and_exact_marker(tmp_path: Path) -> None:
         "TMD_TEST_MODE": "1",
         "TMD_SOURCE_DIR": str(REPOSITORY),
         "TMD_INSTALL_DIR": str(install_dir),
-        "TMD_UID": str(os.getuid()),
-        "TMD_GID": str(os.getgid()),
+        "TMD_UID": _current_uid(),
+        "TMD_GID": _current_gid(),
     }
     run_script(
         REPOSITORY / "install.sh",

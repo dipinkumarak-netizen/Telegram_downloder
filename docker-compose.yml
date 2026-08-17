@@ -17,7 +17,7 @@ services:
     volumes:
       # /storage defaults preserve the current deployment. Fresh installs should set the
       # TMD_*_HOST_DIR variables (the example file uses project-relative directories).
-      - ${TMD_DATABASE_HOST_DIR:-/storage/appdata/telegram-downloader/database}:/data/db
+      - ${TMD_DATABASE_HOST_DIR:-/storage/appdata/telegram-downloader/database}:/data/database
       - ${TMD_SESSION_HOST_DIR:-/storage/appdata/telegram-downloader/session}:/data/session
       - ${TMD_CONFIG_HOST_DIR:-/storage/appdata/telegram-downloader/config}:/data/config
       - ${TMD_LOG_HOST_DIR:-/storage/appdata/telegram-downloader/logs}:/data/logs

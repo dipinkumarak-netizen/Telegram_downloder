@@ -26,4 +26,14 @@ def test_series_detection_is_case_insensitive() -> None:
 
 def test_unique_destination_does_not_overwrite(tmp_path: Path) -> None:
     (tmp_path / "movie.mkv").write_bytes(b"x")
-    assert unique_destination(tmp_path, "movie.mkv").name == "movie (1).mkv"
+    first_duplicate = unique_destination(tmp_path, "movie.mkv")
+    assert first_duplicate.name == "movie (1).mkv"
+    first_duplicate.write_bytes(b"y")
+
+    second_duplicate = unique_destination(tmp_path, "movie.mkv")
+    assert second_duplicate.name == "movie (2).mkv"
+    second_duplicate.write_bytes(b"z")
+
+    third_duplicate = unique_destination(tmp_path, "movie.mkv")
+    assert third_duplicate.name == "movie (3).mkv"
+

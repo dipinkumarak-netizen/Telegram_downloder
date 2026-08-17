@@ -69,9 +69,11 @@ def unique_destination(directory: Path, filename: str) -> Path:
     candidate = directory / sanitize_filename(filename)
     if not candidate.exists() and not candidate.with_suffix(candidate.suffix + ".part").exists():
         return candidate
+    stem = candidate.stem
+    suffix = candidate.suffix
     counter = 1
     while True:
-        candidate = directory / f"{candidate.stem} ({counter}){candidate.suffix}"
+        candidate = directory / f"{stem} ({counter}){suffix}"
         if (
             not candidate.exists()
             and not candidate.with_suffix(candidate.suffix + ".part").exists()
